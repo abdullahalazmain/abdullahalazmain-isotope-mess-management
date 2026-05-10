@@ -859,8 +859,8 @@ const AuthModalContent = ({
         onLoginSuccess('Member');
       }
     } catch (error: any) {
-      console.error(error);
-      alert('Google Login Failed. Please try again.');
+      console.error("Google Auth Error:", error);
+      alert(`Google Login Failed: ${error.message}\n\nPlease check the console for details.`);
     }
   };
   return (
