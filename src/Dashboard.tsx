@@ -57,7 +57,7 @@ const pieData = [
 ];
 const COLORS = ['#6366f1', '#10b981', '#f43f5e'];
 
-const Sidebar = ({ isOpen, onToggle, activeView, setActiveView }: { isOpen: boolean, onToggle: () => void, activeView: string, setActiveView: (v: string) => void }) => {
+const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile }: { isOpen: boolean, onToggle: () => void, activeView: string, setActiveView: (v: string) => void, userProfile: any }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const icons = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, title: "ড্যাশবোর্ড (Dashboard)", active: activeView === 'dashboard' },
@@ -121,7 +121,7 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView }: { isOpen: bool
         </div>
 
         <div className="mt-auto pt-6 shrink-0 cursor-pointer relative z-10 group" onClick={() => setIsProfileOpen(!isProfileOpen)}>
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=James" alt="Profile" className="w-10 h-10 rounded-full border-2 border-white/50 hover:scale-105 transition-transform" />
+          <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white/50 hover:scale-105 transition-transform" />
           
           {/* Custom Tooltip for Profile */}
           {!isProfileOpen && (
@@ -142,10 +142,10 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView }: { isOpen: bool
               className="absolute left-[90px] bottom-10 w-64 bg-white/90 backdrop-blur-xl rounded-2xl p-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.3)] border border-white flex flex-col pointer-events-auto z-50"
             >
               <div className="flex items-center gap-3 mb-4 p-2 border-b border-slate-100 pb-4">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=James" alt="Profile" className="w-12 h-12 rounded-full border-2 border-indigo-100 bg-indigo-50" />
+                <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-indigo-100 bg-indigo-50" />
                 <div>
-                  <h4 className="text-slate-800 font-bold text-sm">গুগল ইউজার</h4>
-                  <p className="text-xs text-slate-500">user@example.com</p>
+                  <h4 className="text-slate-800 font-bold text-sm">{userProfile?.name || 'গুগল ইউজার'}</h4>
+                  <p className="text-xs text-slate-500">{userProfile?.email || 'user@example.com'}</p>
                 </div>
               </div>
               <button onClick={() => window.location.href = '/'} className="flex items-center gap-3 w-full p-3 hover:bg-red-50 rounded-xl text-left font-semibold text-red-500 transition-colors mt-1">
@@ -232,13 +232,17 @@ const Navbar = ({ isSidebarOpen }: { isSidebarOpen: boolean }) => {
 export default function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isManager, setIsManager] = useState(() => localStorage.getItem('userRole') === 'Manager');
+  const [userProfile, setUserProfile] = useState<any>(() => {
+    const saved = localStorage.getItem('userProfile');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [activeView, setActiveView] = useState('dashboard');
 
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans overflow-hidden flex relative">
-      <Sidebar isOpen={isSidebarOpen} onToggle={() => setIsSidebarOpen(!isSidebarOpen)} activeView={activeView} setActiveView={setActiveView} />
+      <Sidebar isOpen={isSidebarOpen} onToggle={() => setIsSidebarOpen(!isSidebarOpen)} activeView={activeView} setActiveView={setActiveView} userProfile={userProfile} />
       
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-28' : 'ml-4'} pl-4 pr-10 py-8 h-screen overflow-y-auto no-scrollbar relative`}>
         <Navbar isSidebarOpen={isSidebarOpen} />

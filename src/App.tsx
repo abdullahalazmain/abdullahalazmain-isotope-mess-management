@@ -5,16 +5,16 @@
 
 import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
 import React, { useState, useRef, useEffect } from "react";
-import { 
-  Users, 
-  BarChart3, 
-  Calculator, 
-  Zap, 
-  FileText, 
-  Check, 
-  X, 
-  Mail, 
-  Phone, 
+import {
+  Users,
+  BarChart3,
+  Calculator,
+  Zap,
+  FileText,
+  Check,
+  X,
+  Mail,
+  Phone,
   MapPin,
   LayoutDashboard,
   Menu,
@@ -35,7 +35,7 @@ import { auth, googleProvider, signInWithPopup } from './firebase';
 /**
  * Navbar component with Glassmorphic design and mobile responsiveness.
  */
-const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, onLogout }: { isLoggedIn: boolean, onLoginClick: () => void, onRegisterClick: () => void, onDashboardClick: () => void, onLogout: () => void }) => {
+const Navbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick, onDashboardClick, onLogout }: { isLoggedIn: boolean, userProfile: any, onLoginClick: () => void, onRegisterClick: () => void, onDashboardClick: () => void, onLogout: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -49,16 +49,14 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
   }, []);
 
   return (
-    <nav 
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "py-2" : "py-4 md:py-6"
-      }`}
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "py-2" : "py-4 md:py-6"
+        }`}
       id="navbar-container"
     >
-      <div 
-        className={`max-w-7xl mx-auto px-6 h-16 flex items-center justify-between rounded-full transition-all duration-500 border border-transparent ${
-          scrolled ? "glass mx-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.15)] border-white/40" : "bg-transparent"
-        }`}
+      <div
+        className={`max-w-7xl mx-auto px-6 h-16 flex items-center justify-between rounded-full transition-all duration-500 border border-transparent ${scrolled ? "glass mx-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.15)] border-white/40" : "bg-transparent"
+          }`}
         id="navbar-inner"
       >
         <div className="flex items-center gap-2 group cursor-pointer" id="logo">
@@ -67,7 +65,7 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
           </div>
           <span className="text-2xl font-black text-[#1e293b] tracking-tight">Isotope</span>
         </div>
-        
+
         <div className="hidden md:flex items-center gap-8 text-[#64748b] font-semibold" id="nav-links">
           <a href="#" className="hover:text-brand-primary transition-all relative group">
             হোম
@@ -82,7 +80,7 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-primary transition-all group-hover:w-full" />
           </a>
         </div>
-        
+
         {isLoggedIn ? (
           <div className="hidden md:flex items-center gap-4">
             <button className="p-2 text-[#64748b] hover:text-brand-primary transition-colors relative">
@@ -91,22 +89,22 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
             </button>
             <div className="relative">
               <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full border-2 border-brand-primary/30 p-0.5 hover:scale-105 transition-transform overflow-hidden cursor-pointer shadow-soft">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser" alt="Profile" className="w-full h-full object-cover bg-brand-primary/10 rounded-full" />
+                <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-full h-full object-cover bg-brand-primary/10 rounded-full" />
               </button>
-              
+
               <AnimatePresence>
                 {isProfileOpen && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
                     className="absolute right-0 mt-4 w-64 glass bg-white/90 rounded-2xl p-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.2)] border border-white flex flex-col z-50"
                   >
                     <div className="flex items-center gap-3 mb-4 p-2 border-b border-slate-100 pb-4">
-                      <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser" alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
+                      <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
                       <div>
-                        <h4 className="text-[#1e293b] font-bold">গুগল ইউজার</h4>
-                        <p className="text-xs text-slate-500">user@example.com</p>
+                        <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
+                        <p className="text-xs text-slate-500">{userProfile?.email || 'user@example.com'}</p>
                       </div>
                     </div>
                     <button onClick={() => { setIsProfileOpen(false); onDashboardClick(); }} className="flex items-center gap-3 w-full p-3 hover:bg-brand-primary/5 rounded-xl text-left font-semibold text-[#1e293b] transition-colors">
@@ -135,7 +133,7 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
         )}
 
         {/* Mobile Menu Toggle */}
-        <button 
+        <button
           className="md:hidden p-2 text-[#1e293b] hover:bg-brand-primary/5 rounded-xl transition-colors"
           onClick={() => setIsOpen(!isOpen)}
         >
@@ -146,7 +144,7 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
       {/* Mobile Drawer */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -161,10 +159,10 @@ const Navbar = ({ isLoggedIn, onLoginClick, onRegisterClick, onDashboardClick, o
               {isLoggedIn ? (
                 <div className="w-full flex flex-col gap-2">
                   <div className="flex items-center gap-3 mb-4 p-4 border-2 border-brand-primary/10 rounded-2xl bg-white/50">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser" alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
+                    <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
                     <div>
-                      <h4 className="text-[#1e293b] font-bold">গুগল ইউজার</h4>
-                      <p className="text-xs text-slate-500">user@example.com</p>
+                      <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
+                      <p className="text-xs text-slate-500">{userProfile?.email || 'user@example.com'}</p>
                     </div>
                   </div>
                   <button onClick={() => { setIsOpen(false); onDashboardClick(); }} className="flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary/10 text-brand-primary rounded-xl font-bold w-full">
@@ -206,41 +204,41 @@ const Hero = ({ onStartClick }: { onStartClick: () => void }) => {
       {/* High-Fidelity 3D/Geometric Background */}
       <div className="absolute inset-0 -z-10">
         {/* Real-world background image with professional overlay */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ 
+          style={{
             backgroundImage: `url('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=2400')`,
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-white/95 via-white/70 to-[#f8f9ff]/100 backdrop-blur-[1px]" />
-        
+
         {/* Shadow/Vignette Effect for Background Depth */}
         <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.05)] pointer-events-none" />
-        
-        <motion.div 
+
+        <motion.div
           style={{ y: y1, rotate }}
-          className="absolute top-[15%] left-[5%] w-96 h-96 bg-brand-primary/10 rounded-[4rem] blur-3xl opacity-40" 
+          className="absolute top-[15%] left-[5%] w-96 h-96 bg-brand-primary/10 rounded-[4rem] blur-3xl opacity-40"
         />
-        <motion.div 
+        <motion.div
           style={{ y: y2 }}
-          className="absolute bottom-[10%] right-[5%] w-[500px] h-[500px] bg-blue-400/5 rounded-full blur-[120px] opacity-60" 
+          className="absolute bottom-[10%] right-[5%] w-[500px] h-[500px] bg-blue-400/5 rounded-full blur-[120px] opacity-60"
         />
-        
+
         {/* Animated Patterns */}
         <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: `radial-gradient(circle at 2px 2px, #5144b1 1.5px, transparent 0)`, backgroundSize: '48px 48px' }} />
-        
+
         <svg className="absolute top-0 left-0 w-full h-full opacity-[0.02]" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
-              <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#5144b1" strokeWidth="1"/>
+              <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#5144b1" strokeWidth="1" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
       </div>
-      
+
       <div className="max-w-5xl mx-auto text-center px-6 relative z-10" id="hero-content">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full glass mb-8 border-brand-primary/20 shadow-[0_10px_30px_-10px_rgba(81,68,177,0.2)]"
@@ -249,7 +247,7 @@ const Hero = ({ onStartClick }: { onStartClick: () => void }) => {
           <span className="text-[11px] md:text-sm font-black text-brand-primary uppercase tracking-[0.2em]">২০২৬ এর সেরা মেস ম্যানেজমেন্ট সিস্টেম</span>
         </motion.div>
 
-        <motion.h1 
+        <motion.h1
           className="text-3xl md:text-6xl lg:text-7xl font-black text-[#1e293b] leading-[1.2] mb-8 tracking-tight"
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -258,8 +256,8 @@ const Hero = ({ onStartClick }: { onStartClick: () => void }) => {
           আইসোটোপ-এর সাথে আপনার <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-primary via-brand-secondary to-blue-600">মেস লাইফ করুন আরও সহজ।</span>
         </motion.h1>
-        
-        <motion.p 
+
+        <motion.p
           className="text-sm md:text-lg text-[#64748b] mb-12 max-w-2xl mx-auto leading-relaxed font-medium"
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -267,8 +265,8 @@ const Hero = ({ onStartClick }: { onStartClick: () => void }) => {
         >
           মিল, বাজার এবং মেস খরচের নিখুঁত হিসাব এখন আপনার হাতের মুঠোয়।
         </motion.p>
-        
-        <motion.button 
+
+        <motion.button
           onClick={onStartClick}
           className="group relative px-12 py-5 bg-brand-primary text-white text-base md:text-xl font-black rounded-full shadow-[0_20px_50px_rgba(81,68,177,0.3)] hover:shadow-[0_25px_60px_rgba(81,68,177,0.4)] transition-all overflow-hidden mb-12"
           initial={{ opacity: 0, y: 40 }}
@@ -343,18 +341,18 @@ const NumberTicker = ({ value, suffix = "", useBengali = true }: { value: string
 
 const StatsBar = () => (
   <div className="max-w-4xl mx-auto -mt-16 md:-mt-24 mb-20 relative z-20 px-6" id="stats-section">
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
       className="glass px-6 md:px-12 py-6 md:py-8 rounded-3xl md:rounded-full flex flex-col md:flex-row items-center justify-center md:justify-between gap-8 md:gap-4 shadow-[0_40px_80px_-15px_rgba(81,68,177,0.15)] bg-white/80 border border-white/60"
     >
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         whileInView={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
-        whileHover={{ scale: 1.05, y: -5 }} 
+        whileHover={{ scale: 1.05, y: -5 }}
         className="flex items-center gap-4 cursor-default group"
       >
         <div className="p-3 bg-brand-primary/10 rounded-full group-hover:bg-brand-primary/20 transition-colors">
@@ -363,11 +361,11 @@ const StatsBar = () => (
         <span className="text-lg md:text-xl font-black text-[#1e293b] min-w-[100px]"><NumberTicker value="500" />+ মেস</span>
       </motion.div>
       <div className="hidden md:block w-px h-10 bg-slate-200" />
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         whileInView={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.4, duration: 0.8, ease: "easeOut" }}
-        whileHover={{ scale: 1.05, y: -5 }} 
+        whileHover={{ scale: 1.05, y: -5 }}
         className="flex items-center gap-4 cursor-default group"
       >
         <div className="p-3 bg-blue-500/10 rounded-full group-hover:bg-blue-500/20 transition-colors">
@@ -376,11 +374,11 @@ const StatsBar = () => (
         <span className="text-lg md:text-xl font-black text-[#1e293b] min-w-[120px]"><NumberTicker value="10,000" />+ ইউজার</span>
       </motion.div>
       <div className="hidden md:block w-px h-10 bg-slate-200" />
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         whileInView={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.5, duration: 0.8, ease: "easeOut" }}
-        whileHover={{ scale: 1.05, y: -5 }} 
+        whileHover={{ scale: 1.05, y: -5 }}
         className="flex items-center gap-4 cursor-default group"
       >
         <div className="p-3 bg-emerald-500/10 rounded-full group-hover:bg-emerald-500/20 transition-colors">
@@ -419,32 +417,32 @@ const Features = () => {
   return (
     <section className="py-24 px-6 max-w-7xl mx-auto overflow-hidden" id="features">
       <div className="text-center mb-20">
-        <motion.h2 
+        <motion.h2
           initial={{ opacity: 0, scale: 0.9 }}
           whileInView={{ opacity: 1, scale: 1 }}
           className="text-3xl md:text-5xl font-black text-[#1e293b] mb-4"
         >
           আমাদের বৈশিষ্ট্যসমূহ
         </motion.h2>
-        <motion.div 
+        <motion.div
           initial={{ width: 0 }}
           whileInView={{ width: 96 }}
-          className="h-1.5 bg-gradient-to-r from-brand-primary to-brand-secondary mx-auto rounded-full" 
+          className="h-1.5 bg-gradient-to-r from-brand-primary to-brand-secondary mx-auto rounded-full"
         />
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {features.map((f, i) => (
-          <motion.div 
+          <motion.div
             key={i}
             className="p-10 glass rounded-[2.5rem] hover:shadow-[0_40px_100px_-15px_rgba(81,68,177,0.15)] transition-all border-none group relative overflow-hidden bg-white/60 hover:bg-white"
             whileHover={{ y: -20, scale: 1.02 }}
             initial={{ opacity: 0, x: i % 2 === 0 ? -50 : 50, y: 50 }}
             whileInView={{ opacity: 1, x: 0, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
-            transition={{ 
-              delay: i * 0.1, 
-              duration: 0.8, 
+            transition={{
+              delay: i * 0.1,
+              duration: 0.8,
               type: "spring",
               damping: 15
             }}
@@ -452,23 +450,23 @@ const Features = () => {
           >
             {/* Background Accent */}
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-primary/20 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-700" />
-            
-            <motion.div 
+
+            <motion.div
               whileHover={{ scale: 1.2, rotate: 12 }}
               className="mb-8 p-6 bg-white rounded-[1.5rem] shadow-[0_15px_35px_-10px_rgba(0,0,0,0.05)] group-hover:shadow-brand-primary/20 transition-all duration-500 inline-block relative z-10"
             >
               <div className="relative z-10">{f.icon}</div>
               <div className="absolute inset-0 bg-brand-primary/5 rounded-[1.5rem] scale-0 group-hover:scale-150 transition-transform duration-700 opacity-0 group-hover:opacity-100" />
             </motion.div>
-            
+
             <h3 className="text-xl font-black text-[#1e293b] mb-4 group-hover:text-brand-primary transition-colors relative z-10">{f.title}</h3>
             <p className="text-sm text-[#64748b] leading-relaxed font-semibold transition-colors group-hover:text-[#1e293b] relative z-10">{f.desc}</p>
-            
+
             {/* Professional Semi-circle Flash Hover Effect - More Refined */}
             <div className="absolute -top-6 -right-6 w-20 h-20 bg-brand-primary rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-8 -translate-y-8 group-hover:translate-x-0 group-hover:translate-y-0 flex items-center justify-center shadow-[0_0_40px_rgba(81,68,177,0.4)]">
               <Zap className="w-7 h-7 text-white ml-[-12px] mt-[12px] animate-pulse" />
             </div>
-            
+
             {/* Hover Shine Effect */}
             <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           </motion.div>
@@ -500,20 +498,20 @@ const Timeline = () => {
           <h2 className="text-3xl md:text-4xl font-black text-[#1e293b] mb-4">কিভাবে শুরু করবেন?</h2>
           <div className="w-20 h-1.5 bg-brand-primary mx-auto rounded-full shadow-lg shadow-brand-primary/20" />
         </div>
-        
+
         <div className="relative pt-4 pb-12" id="timeline">
           {/* Vertical line precisely middle */}
           <div className="absolute left-[20px] md:left-1/2 -translate-x-1/2 top-0 bottom-0 w-2 md:w-3 bg-brand-primary/5 rounded-full" />
-          <motion.div 
+          <motion.div
             style={{ scaleY: pathLength }}
-            className="absolute left-[20px] md:left-1/2 -translate-x-1/2 top-0 bottom-0 w-2 md:w-3 bg-gradient-to-b from-brand-primary via-brand-secondary to-blue-500 rounded-full origin-top shadow-[0_0_15px_rgba(81,68,177,0.3)]" 
+            className="absolute left-[20px] md:left-1/2 -translate-x-1/2 top-0 bottom-0 w-2 md:w-3 bg-gradient-to-b from-brand-primary via-brand-secondary to-blue-500 rounded-full origin-top shadow-[0_0_15px_rgba(81,68,177,0.3)]"
           />
-          
+
           <div className="space-y-16 md:space-y-32">
             {steps.map((step, i) => (
-              <motion.div 
-                key={i} 
-                className={`flex items-center w-full relative ${i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row`} 
+              <motion.div
+                key={i}
+                className={`flex items-center w-full relative ${i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row`}
                 id={`step-${i}`}
                 initial={{ opacity: 0, x: i % 2 === 0 ? -30 : 30 }}
                 whileInView={{ opacity: 1, x: 0 }}
@@ -524,7 +522,7 @@ const Timeline = () => {
                 <div className={`w-full md:w-1/2 flex ${i % 2 === 0 ? 'md:justify-end' : 'md:justify-start'} justify-start pl-14 md:pl-0 md:px-12 lg:px-16`}>
                   <div className="glass p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] inline-block text-left border-none shadow-[0_20px_40px_rgba(0,0,0,0.06)] bg-white/80 hover:scale-105 transition-transform max-w-[calc(100%-40px)] md:max-w-md w-full">
                     <div className="flex items-center gap-4 md:gap-6">
-                      <motion.div 
+                      <motion.div
                         whileHover={{ scale: 1.2, rotate: 10 }}
                         className="flex-shrink-0 p-3 md:p-4 bg-brand-primary/10 rounded-xl md:rounded-2xl text-brand-primary shadow-inner"
                       >
@@ -534,13 +532,13 @@ const Timeline = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Center Circle */}
                 <div className="absolute left-[20px] md:left-1/2 -translate-x-1/2 flex items-center justify-center z-10">
-                  <motion.div 
+                  <motion.div
                     className="w-10 h-10 md:w-12 md:h-12 rounded-full glass border-none flex items-center justify-center text-[#1e293b] text-xs md:text-lg font-black shadow-xl bg-white"
-                    whileInView={{ 
-                      backgroundColor: "#5144b1", 
+                    whileInView={{
+                      backgroundColor: "#5144b1",
                       color: "#ffffff",
                       scale: 1.1
                     }}
@@ -549,7 +547,7 @@ const Timeline = () => {
                     {step.number}
                   </motion.div>
                 </div>
-                
+
                 {/* Empty side for layout on desktop */}
                 <div className="hidden md:block w-1/2" />
               </motion.div>
@@ -575,7 +573,7 @@ const ComparisonTable = () => {
         <h2 className="text-3xl md:text-5xl font-black text-[#1e293b] mb-4">কেন আইসোটোপ ব্যবহার করবেন?</h2>
         <div className="w-20 h-1.5 bg-brand-primary mx-auto rounded-full" />
       </div>
-      
+
       <div className="overflow-hidden rounded-[2rem] md:rounded-[3rem] shadow-[0_30px_70px_-15px_rgba(81,68,177,0.12)] bg-white border border-brand-primary/5" id="comparison-table">
         <div className="w-full overflow-x-auto no-scrollbar">
           <div className="min-w-full">
@@ -584,11 +582,11 @@ const ComparisonTable = () => {
               <div className="text-center text-[9px] sm:text-[12px] md:text-2xl opacity-90 flex items-center justify-center leading-tight px-1">খাতা-কলমের হিসাব</div>
               <div className="text-center text-[10px] sm:text-[14px] md:text-2xl flex items-center justify-center px-1">আইসোটোপ</div>
             </div>
-            
+
             <div className="divide-y divide-brand-primary/5">
               {data.map((row, i) => (
-                <motion.div 
-                  key={i} 
+                <motion.div
+                  key={i}
                   initial={{ opacity: 0, y: 10 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
@@ -674,35 +672,35 @@ const Testimonials = () => {
           <h2 className="text-3xl md:text-5xl font-black text-[#1e293b] mb-4">ইউজারদের মতামত</h2>
           <div className="w-20 h-1.5 bg-brand-primary mx-auto rounded-full" />
         </div>
-        
-        <div 
+
+        <div
           className="relative group/nav"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          <button 
+          <button
             onClick={() => scroll('left')}
             className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white rounded-full shadow-lg border border-brand-primary/10 flex items-center justify-center text-brand-primary hover:bg-brand-primary hover:text-white transition-all opacity-0 group-hover/nav:opacity-100 hover:scale-110 active:scale-95"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          
-          <button 
+
+          <button
             onClick={() => scroll('right')}
             className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white rounded-full shadow-lg border border-brand-primary/10 flex items-center justify-center text-brand-primary hover:bg-brand-primary hover:text-white transition-all opacity-0 group-hover/nav:opacity-100 hover:scale-110 active:scale-95"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
 
-          <div 
+          <div
             ref={scrollRef}
-            className="flex overflow-x-auto pb-10 gap-8 snap-x no-scrollbar px-2" 
+            className="flex overflow-x-auto pb-10 gap-8 snap-x no-scrollbar px-2"
             id="testimonials-scroll"
           >
             {testimonials.map((t, i) => (
-              <div 
-                key={i} 
-                className="min-w-[300px] md:min-w-[420px] snap-center p-8 md:p-10 glass rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] bg-white/80 border-none relative group" 
+              <div
+                key={i}
+                className="min-w-[300px] md:min-w-[420px] snap-center p-8 md:p-10 glass rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] bg-white/80 border-none relative group"
                 id={`testimonial-${i}`}
               >
                 <div className="flex items-center gap-4 mb-6">
@@ -731,7 +729,7 @@ const Footer = () => (
   <footer className="bg-[#1e293b] text-white pt-16 pb-10 px-6 relative overflow-hidden" id="footer">
     <div className="absolute top-0 left-0 right-0 h-px bg-white/5" />
     <div className="absolute bottom-[-10%] right-[-10%] w-[800px] h-[800px] bg-brand-primary/10 rounded-full blur-[150px]" />
-    
+
     <div className="max-w-7xl mx-auto relative z-10">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
         <div id="footer-logo">
@@ -742,11 +740,11 @@ const Footer = () => (
             <span className="text-3xl font-black tracking-tighter">Isotope</span>
           </div>
           <p className="text-slate-400 leading-relaxed text-sm md:text-base font-medium">
-            মেস লাইফকে সহজ করতে আমরা নিয়ে এসেছি আইসোটোপ। 
+            মেস লাইফকে সহজ করতে আমরা নিয়ে এসেছি আইসোটোপ।
             মিলের হিসাব থেকে বাজার মনিটর—সবই এক জায়গায়।
           </p>
         </div>
-        
+
         <div id="footer-links">
           <h4 className="text-lg font-black mb-6">প্রয়োজনীয় লিঙ্ক</h4>
           <ul className="space-y-3 text-slate-400 text-sm md:text-base">
@@ -756,7 +754,7 @@ const Footer = () => (
             <li><a href="#" className="hover:text-white transition-all inline-block hover:translate-x-3 duration-300">প্রাইভেসি পলিসি</a></li>
           </ul>
         </div>
-        
+
         <div id="footer-contact">
           <h4 className="text-lg font-black mb-6">যোগাযোগ</h4>
           <ul className="space-y-4 text-slate-400 text-sm md:text-base font-medium">
@@ -774,16 +772,16 @@ const Footer = () => (
             </li>
           </ul>
         </div>
-        
+
         <div id="footer-brand">
           <div className="glass-dark p-6 rounded-[2rem] text-center border-white/5 shadow-2xl relative overflow-hidden group/profile max-w-[280px] mx-auto lg:ml-auto">
             <div className="absolute inset-0 bg-brand-primary/5 opacity-0 group-hover/profile:opacity-100 transition-opacity" />
             <p className="text-[10px] uppercase tracking-[0.4em] text-slate-500 mb-4 font-black">ENGINEERED BY</p>
-            
+
             <div className="flex flex-col items-center gap-3 relative z-10">
               <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-brand-primary/30 p-1 mb-1 group-hover/profile:scale-110 transition-transform duration-500">
-                <img 
-                  src="/profile.jpg" 
+                <img
+                  src="/profile.jpg"
                   alt="Al Azmain"
                   className="w-full h-full object-cover rounded-full shadow-2xl"
                 />
@@ -800,7 +798,7 @@ const Footer = () => (
           </div>
         </div>
       </div>
-      
+
       <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center gap-6 text-slate-500 text-sm md:text-base font-bold">
         <p>© ২০২৬ আইসোটোপ - সর্বস্বত্ব সংরক্ষিত।</p>
         <div className="flex gap-6">
@@ -816,10 +814,10 @@ const Footer = () => (
 // ----- MODALS & DASHBOARD TRANSITION -----
 
 const ModalOverlay = ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
-  <motion.div 
-    initial={{ opacity: 0 }} 
-    animate={{ opacity: 1 }} 
-    exit={{ opacity: 0 }} 
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
     className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
   >
     <div className="absolute inset-0 bg-[#0f172a]/60 backdrop-blur-md" onClick={onClose} />
@@ -827,36 +825,48 @@ const ModalOverlay = ({ children, onClose }: { children: React.ReactNode, onClos
   </motion.div>
 );
 
-const AuthModalContent = ({ 
-  type, 
-  onSwitch, 
-  onLoginSuccess 
-}: { 
-  type: 'login' | 'register', 
+const AuthModalContent = ({
+  type,
+  onSwitch,
+  onLoginSuccess
+}: {
+  type: 'login' | 'register',
   onSwitch: () => void,
-  onLoginSuccess: (role: 'Manager' | 'Member') => void 
+  onLoginSuccess: (role: 'Manager' | 'Member', profile?: any) => void
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const profile = {
+      name: email.split('@')[0],
+      email: email,
+      photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
+    };
     if (email === 'abdullahalazmain1@gmail.com' && password === '@12Azmain') {
-      onLoginSuccess('Manager');
+      onLoginSuccess('Manager', profile);
     } else {
       // Any other user logs in as a regular member
-      onLoginSuccess('Member');
+      onLoginSuccess('Member', profile);
     }
   };
 
   const handleGoogleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const userEmail = result.user.email;
+      const user = result.user;
+      const profile = {
+        name: user.displayName || 'গুগল ইউজার',
+        email: user.email || '',
+        photoURL: user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser'
+      };
+      
+      const userEmail = user.email;
       if (userEmail === 'abdullahalazmain1@gmail.com') {
-        onLoginSuccess('Manager');
+        onLoginSuccess('Manager', profile);
       } else {
-        onLoginSuccess('Member');
+        onLoginSuccess('Member', profile);
       }
     } catch (error: any) {
       console.error("Google Auth Error:", error);
@@ -887,8 +897,8 @@ const AuthModalContent = ({
           {type === 'login' ? 'স্বাগতম ফিরে এসেছেন!' : 'নতুন একাউন্ট তৈরি করুন'}
         </h2>
         <p className="text-[#64748b] font-medium mb-8">
-          {type === 'login' 
-            ? 'আপনার মেস একাউন্টে লগইন করুন' 
+          {type === 'login'
+            ? 'আপনার মেস একাউন্টে লগইন করুন'
             : 'আপনার মেস ম্যানেজমেন্ট যাত্রা শুরু করুন'}
         </p>
 
@@ -925,7 +935,7 @@ const AuthModalContent = ({
           <div className="flex-1 h-px bg-slate-200" />
         </div>
 
-        <button 
+        <button
           onClick={handleGoogleLogin}
           type="button"
           className="w-full py-3.5 px-5 bg-white border-2 border-slate-100 text-[#1e293b] font-bold rounded-2xl shadow-sm hover:bg-slate-50 hover:border-slate-200 transition-all flex items-center justify-center gap-3"
@@ -999,7 +1009,7 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-            <motion.button 
+            <motion.button
               whileHover={{ y: -5, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setView('join')}
@@ -1015,7 +1025,7 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
               </div>
             </motion.button>
 
-            <motion.button 
+            <motion.button
               whileHover={{ y: -5, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleCreateMess}
@@ -1033,7 +1043,7 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
           </div>
         </>
       ) : (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className="relative z-10 max-w-md mx-auto"
@@ -1075,10 +1085,18 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(() => {
+    const saved = localStorage.getItem('userProfile');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [activeModal, setActiveModal] = useState<'login' | 'register' | 'decision' | null>(null);
 
-  const handleLoginSuccess = (role: 'Manager' | 'Member') => {
+  const handleLoginSuccess = (role: 'Manager' | 'Member', profile?: any) => {
     localStorage.setItem('userRole', role);
+    if (profile) {
+      localStorage.setItem('userProfile', JSON.stringify(profile));
+      setUserProfile(profile);
+    }
     setIsLoggedIn(true);
     setActiveModal('decision');
   };
@@ -1090,22 +1108,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen font-sans selection:bg-brand-primary selection:text-white bg-[#f8f9ff] text-[#2D3142]">
-      <Navbar 
+      <Navbar
         isLoggedIn={isLoggedIn}
+        userProfile={userProfile}
         onLoginClick={() => setActiveModal('login')}
         onRegisterClick={() => setActiveModal('register')}
         onDashboardClick={() => setActiveModal('decision')}
         onLogout={handleLogout}
       />
-      
+
       <AnimatePresence mode="wait">
         {activeModal && (
           <ModalOverlay onClose={() => setActiveModal(null)}>
             {activeModal === 'decision' ? (
               <DecisionScreenModal onClose={() => setActiveModal(null)} />
             ) : (
-              <AuthModalContent 
-                type={activeModal} 
+              <AuthModalContent
+                type={activeModal}
                 onSwitch={() => setActiveModal(activeModal === 'login' ? 'register' : 'login')}
                 onLoginSuccess={handleLoginSuccess}
               />
@@ -1126,9 +1145,9 @@ export default function App() {
         <Testimonials />
       </main>
       <Footer />
-      
+
       {/* Scroll to top decorative bar */}
-      <motion.div 
+      <motion.div
         className="fixed top-0 left-0 right-0 h-1.5 bg-brand-primary transform origin-left z-[60]"
         style={{ scaleX: useScroll().scrollYProgress }}
       />
