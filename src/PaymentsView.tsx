@@ -1,0 +1,407 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  CreditCard, Home, Zap, MoreHorizontal, ChevronDown, Check, X, 
+  Plus, Users, Calculator, AlertTriangle, ChevronRight, User as UserIcon, Minus
+} from 'lucide-react';
+
+interface MemberBill {
+  id: string;
+  name: string;
+  rent: number;
+  utility: number;
+  others: number;
+  isPaid: boolean;
+}
+
+const mockMembers: MemberBill[] = [
+  { id: '1', name: 'James Doe', rent: 3000, utility: 1200, others: 500, isPaid: true },
+  { id: '2', name: 'Rahim Uddin', rent: 3000, utility: 1200, others: 200, isPaid: false },
+  { id: '3', name: 'Karim Hasan', rent: 3000, utility: 1200, others: 0, isPaid: false },
+  { id: '4', name: 'Zayed Khan', rent: 3000, utility: 1200, others: 1500, isPaid: true }
+];
+
+type BillCategory = 'বাসা ভাড়া' | 'ইউটিলিটি' | 'অন্যান্য';
+
+export default function PaymentsView({ isManager }: { isManager: boolean }) {
+  const [viewMode, setViewMode] = useState<'global' | 'personal'>('global');
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  
+  // Add Bill Modal States
+  const [isAddBillModalOpen, setIsAddBillModalOpen] = useState(false);
+  const [billStep, setBillStep] = useState<1 | 2 | 3>(1);
+  const [billName, setBillName] = useState('');
+  const [billCategory, setBillCategory] = useState<BillCategory>('ইউটিলিটি');
+  const [billTotal, setBillTotal] = useState<number | ''>('');
+  
+  const [selectedMembers, setSelectedMembers] = useState<string[]>(mockMembers.map(m => m.id)); // Default all
+  
+  // Split logic state: { memberId: amount }
+  const [splitAmounts, setSplitAmounts] = useState<{ [key: string]: number }>({});
+
+  const currentUser = mockMembers[0]; // Pretend James is current user
+
+  // Handle auto-split when progressing to Step 3
+  useEffect(() => {
+    if (billStep === 3 && billTotal && selectedMembers.length > 0) {
+      const splitVal = Math.floor((billTotal as number) / selectedMembers.length);
+      const newSplits: { [key: string]: number } = {};
+      selectedMembers.forEach(id => newSplits[id] = splitVal);
+      setSplitAmounts(newSplits);
+    }
+  }, [billStep, billTotal, selectedMembers]);
+
+  const handleSplitChange = (id: string, newAmount: number) => {
+    if (newAmount < 0) return;
+    setSplitAmounts({ ...splitAmounts, [id]: newAmount });
+  };
+
+  let currentAssignedTotal = 0;
+  (Object.values(splitAmounts) as number[]).forEach(val => currentAssignedTotal += val);
+  const remainder = (typeof billTotal === 'number' ? billTotal : 0) - currentAssignedTotal;
+  const isPerfectSplit = remainder === 0 && typeof billTotal === 'number' && billTotal > 0;
+
+  const handleCloseModal = () => {
+    setIsAddBillModalOpen(false);
+    setTimeout(() => {
+      setBillStep(1); setBillName(''); setBillTotal(''); setBillCategory('ইউটিলিটি');
+      setSelectedMembers(mockMembers.map(m => m.id));
+    }, 300);
+  };
+
+  return (
+    <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+            <CreditCard className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-slate-800">পেমেন্টস ও বিল</h1>
+            <p className="text-sm font-semibold text-slate-500">বাসা ভাড়া, ইউটিলিটি এবং অন্যান্য খরচ</p>
+          </div>
+        </div>
+        
+        {isManager && (
+          <button 
+            onClick={() => setIsAddBillModalOpen(true)}
+            className="hidden md:flex px-6 py-3 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all items-center gap-2"
+          >
+            <Plus className="w-5 h-5" /> বিল যোগ করুন
+          </button>
+        )}
+      </div>
+
+      {/* Toggle Global vs Personal */}
+      <div className="flex bg-slate-100 p-1 rounded-2xl w-fit mb-8 shadow-inner border border-slate-200/60">
+        <button 
+          onClick={() => setViewMode('global')}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'global' ? 'bg-white text-[#6366f1] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >মেসের ওভারভিউ</button>
+        <button 
+          onClick={() => setViewMode('personal')}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-[#6366f1] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >আমার ওভারভিউ</button>
+      </div>
+
+      {/* TOP OVERVIEW CARDS */}
+      {viewMode === 'global' ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Rent Card */}
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex flex-col">
+            <div className="flex justify-between items-start mb-4">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center"><Home className="w-5 h-5"/></div>
+                 <div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">মোট বাসা ভাড়া</p>
+                   <h3 className="text-xl font-black text-slate-800">৳ ১২,০০০</h3>
+                 </div>
+               </div>
+               <button onClick={() => setExpandedCard(expandedCard === 'rent' ? null : 'rent')} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
+                 <ChevronDown className={`w-4 h-4 transition-transform ${expandedCard === 'rent' ? 'rotate-180' : ''}`} />
+               </button>
+            </div>
+            <AnimatePresence>
+              {expandedCard === 'rent' && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t border-slate-100 pt-3">
+                  {mockMembers.map(m => (
+                    <div key={m.id} className="flex justify-between items-center py-2 text-xs">
+                      <span className="font-bold text-slate-600">{m.name}</span>
+                      <span className={`font-bold px-2 py-1 rounded-md ${m.isPaid ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>{m.isPaid ? 'Paid' : 'Unpaid'}</span>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Utility Card */}
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex flex-col">
+            <div className="flex justify-between items-start mb-4">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center"><Zap className="w-5 h-5"/></div>
+                 <div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ইউটিলিটি বিল</p>
+                   <h3 className="text-xl font-black text-slate-800">৳ ৪,৮০০</h3>
+                 </div>
+               </div>
+               <button onClick={() => setExpandedCard(expandedCard === 'utility' ? null : 'utility')} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition-colors">
+                 <ChevronDown className={`w-4 h-4 transition-transform ${expandedCard === 'utility' ? 'rotate-180' : ''}`} />
+               </button>
+            </div>
+            <AnimatePresence>
+              {expandedCard === 'utility' && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t border-slate-100 pt-3">
+                  <div className="flex justify-between text-xs py-2"><span className="font-bold text-slate-600">বিদ্যুৎ বিল</span><span className="font-black text-slate-800">৳ ৩,২০০</span></div>
+                  <div className="flex justify-between text-xs py-2"><span className="font-bold text-slate-600">গ্যাস বিল</span><span className="font-black text-slate-800">৳ ১,২০০</span></div>
+                  <div className="flex justify-between text-xs py-2"><span className="font-bold text-slate-600">ময়লা ও পানি</span><span className="font-black text-slate-800">৳ ৪০০</span></div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Others Card */}
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex flex-col">
+            <div className="flex justify-between items-start mb-4">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center"><MoreHorizontal className="w-5 h-5"/></div>
+                 <div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">অন্যান্য</p>
+                   <h3 className="text-xl font-black text-slate-800">৳ ২,২০০</h3>
+                 </div>
+               </div>
+               <button onClick={() => setExpandedCard(expandedCard === 'others' ? null : 'others')} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                 <ChevronDown className={`w-4 h-4 transition-transform ${expandedCard === 'others' ? 'rotate-180' : ''}`} />
+               </button>
+            </div>
+            <AnimatePresence>
+              {expandedCard === 'others' && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t border-slate-100 pt-3">
+                  <div className="flex justify-between text-xs py-2"><span className="font-bold text-slate-600">ওয়াইফাই</span><span className="font-black text-slate-800">৳ ১,০০০</span></div>
+                  <div className="flex justify-between text-xs py-2"><span className="font-bold text-slate-600">বুয়া বিল</span><span className="font-black text-slate-800">৳ ১,২০০</span></div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+           <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-center">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">আমার বাসা ভাড়া</p>
+             <h3 className="text-2xl font-black text-slate-800">৳ {currentUser.rent}</h3>
+           </div>
+           <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-center">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">আমার ইউটিলিটি</p>
+             <h3 className="text-2xl font-black text-slate-800">৳ {currentUser.utility}</h3>
+           </div>
+           <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-center">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">অন্যান্য</p>
+             <h3 className="text-2xl font-black text-slate-800">৳ {currentUser.others}</h3>
+           </div>
+           <div className="bg-gradient-to-r from-rose-500 to-pink-500 rounded-3xl p-5 flex flex-col justify-between text-white shadow-xl shadow-rose-200">
+             <div className="flex justify-between items-start">
+               <p className="text-[10px] font-bold text-rose-100 uppercase tracking-wider mb-1">সর্বমোট বকেয়া</p>
+               <button className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"><ChevronRight className="w-3 h-3" /></button>
+             </div>
+             <h3 className="text-3xl font-black">৳ {currentUser.rent + currentUser.utility + currentUser.others}</h3>
+           </div>
+        </div>
+      )}
+
+      {/* MEMBER BILLING LIST */}
+      <h2 className="text-lg font-black text-slate-800 mb-4">মেম্বারদের বিল স্ট্যাটাস</h2>
+      <div className="bg-white/70 backdrop-blur-md shadow-xl border border-white/40 rounded-[2rem] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                <th className="p-5">মেম্বার</th>
+                <th className="p-5">বাসা ভাড়া</th>
+                <th className="p-5">ইউটিলিটি</th>
+                <th className="p-5">অন্যান্য</th>
+                <th className="p-5">স্ট্যাটাস</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockMembers.map((member) => (
+                <tr key={member.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer group">
+                  <td className="p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center font-black text-indigo-700 text-xs shadow-inner">
+                        {member.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <span className="font-bold text-slate-800 text-sm group-hover:text-[#6366f1] transition-colors">{member.name}</span>
+                    </div>
+                  </td>
+                  <td className="p-5 font-bold text-slate-600">৳ {member.rent}</td>
+                  <td className="p-5 font-bold text-slate-600">৳ {member.utility}</td>
+                  <td className="p-5 font-bold text-slate-600">৳ {member.others}</td>
+                  <td className="p-5">
+                    <span className={`px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 w-fit ${member.isPaid ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-500 border border-rose-100'}`}>
+                      {member.isPaid ? <Check className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                      {member.isPaid ? 'Paid' : 'Unpaid'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Floating Action Button (Mobile) */}
+      {isManager && (
+        <button 
+          onClick={() => setIsAddBillModalOpen(true)}
+          className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-[#1e1b4b] text-white rounded-full shadow-[0_10px_30px_rgba(30,27,75,0.4)] flex items-center justify-center z-40 hover:scale-105 transition-transform"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* ADD BILL MULTI-STEP MODAL */}
+      <AnimatePresence>
+        {isAddBillModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+             <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-lg rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+               
+               {/* Header */}
+               <div className="bg-[#1e1b4b] p-6 flex justify-between items-center text-white shrink-0">
+                 <div>
+                   <h2 className="text-xl font-black">নতুন বিল যুক্ত করুন</h2>
+                   <p className="text-xs font-semibold text-indigo-200 mt-1">স্টেপ {billStep} / 3</p>
+                 </div>
+                 <button onClick={handleCloseModal} className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
+               </div>
+
+               {/* Progress Bar */}
+               <div className="h-1 bg-slate-100 w-full shrink-0">
+                 <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${(billStep / 3) * 100}%` }} />
+               </div>
+
+               {/* Body Content */}
+               <div className="p-6 overflow-y-auto flex-1">
+                 {/* STEP 1: Details */}
+                 {billStep === 1 && (
+                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-5">
+                     <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">বিলের নাম</label>
+                       <input type="text" placeholder="যেমন: বিদ্যুৎ বিল (এপ্রিল)" value={billName} onChange={e => setBillName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">ক্যাটাগরি</label>
+                       <div className="grid grid-cols-3 gap-2">
+                         {(['বাসা ভাড়া', 'ইউটিলিটি', 'অন্যান্য'] as BillCategory[]).map(cat => (
+                           <button key={cat} onClick={() => setBillCategory(cat)} className={`py-3 rounded-xl text-xs font-bold transition-all border-2 ${billCategory === cat ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-100 text-slate-500'}`}>{cat}</button>
+                         ))}
+                       </div>
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">মোট টাকার পরিমাণ</label>
+                       <div className="relative">
+                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">৳</span>
+                         <input type="number" placeholder="0" value={billTotal} onChange={e => setBillTotal(e.target.value === '' ? '' : Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 text-[#6366f1] text-2xl font-black px-10 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                       </div>
+                     </div>
+                   </motion.div>
+                 )}
+
+                 {/* STEP 2: Select Members */}
+                 {billStep === 2 && (
+                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                     <div className="flex justify-between items-center mb-4">
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">কাদের জন্য বিল?</label>
+                       <button onClick={() => setSelectedMembers(mockMembers.map(m=>m.id))} className="text-xs font-bold text-indigo-500">সবাইকে সিলেক্ট করুন</button>
+                     </div>
+                     <div className="flex flex-col gap-2">
+                       {mockMembers.map(member => {
+                         const isSelected = selectedMembers.includes(member.id);
+                         return (
+                           <div key={member.id} onClick={() => isSelected ? setSelectedMembers(selectedMembers.filter(id => id !== member.id)) : setSelectedMembers([...selectedMembers, member.id])} className={`flex items-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50 border-indigo-500' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+                             <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-200'}`}>
+                               {isSelected && <Check className="w-3 h-3" />}
+                             </div>
+                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><UserIcon className="w-4 h-4"/></div>
+                             <span className={`font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-600'}`}>{member.name}</span>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </motion.div>
+                 )}
+
+                 {/* STEP 3: Split Logic */}
+                 {billStep === 3 && (
+                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex justify-between items-center mb-6">
+                       <div className="flex items-center gap-2 text-slate-600"><Calculator className="w-5 h-5" /> <span className="text-sm font-bold">মোট বিল</span></div>
+                       <span className="text-xl font-black text-[#1e1b4b]">৳ {billTotal}</span>
+                     </div>
+
+                     <div className="flex flex-col gap-3 pb-24">
+                       {selectedMembers.map(id => {
+                         const member = mockMembers.find(m => m.id === id);
+                         return (
+                           <div key={id} className="flex justify-between items-center bg-white border border-slate-200 p-3 rounded-2xl shadow-sm">
+                             <span className="font-bold text-sm text-slate-700 ml-2 truncate w-24">{member?.name}</span>
+                             <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-1 border border-slate-100">
+                                <button onClick={() => handleSplitChange(id, (splitAmounts[id] || 0) - 100)} className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-rose-500 hover:bg-rose-50"><Minus className="w-4 h-4" /></button>
+                                <div className="relative w-20">
+                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">৳</span>
+                                  <input type="number" value={splitAmounts[id] || 0} onChange={e => handleSplitChange(id, parseInt(e.target.value) || 0)} className="w-full text-center font-black text-[#6366f1] bg-transparent focus:outline-none pl-4 pr-1" />
+                                </div>
+                                <button onClick={() => handleSplitChange(id, (splitAmounts[id] || 0) + 100)} className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-emerald-500 hover:bg-emerald-50"><Plus className="w-4 h-4" /></button>
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </motion.div>
+                 )}
+               </div>
+
+               {/* Footer Action */}
+               <div className="bg-white border-t border-slate-100 p-6 flex flex-col gap-4 shrink-0 relative z-10">
+                 {billStep === 3 && (
+                   <div className={`p-4 rounded-xl flex justify-between items-center border-2 transition-colors ${isPerfectSplit ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-rose-50 border-rose-500 text-rose-700'}`}>
+                     <span className="text-xs font-bold uppercase tracking-wider">{isPerfectSplit ? 'হিসাব সঠিক' : 'অবশিষ্ট আছে'}</span>
+                     <span className="text-xl font-black flex items-center gap-2">
+                       {!isPerfectSplit && <AlertTriangle className="w-5 h-5" />}
+                       ৳ {remainder}
+                     </span>
+                   </div>
+                 )}
+
+                 <div className="flex gap-3">
+                   {billStep > 1 && <button onClick={() => setBillStep(s => s - 1 as 1|2|3)} className="px-6 py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">আগের স্টেপ</button>}
+                   
+                   {billStep < 3 ? (
+                     <button 
+                       disabled={billStep === 1 && (!billName || !billTotal) || billStep === 2 && selectedMembers.length === 0}
+                       onClick={() => setBillStep(s => s + 1 as 1|2|3)} 
+                       className="flex-1 py-4 bg-[#6366f1] text-white rounded-xl font-bold shadow-lg shadow-indigo-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                     >
+                       পরবর্তী স্টেপ <ChevronRight className="w-4 h-4" />
+                     </button>
+                   ) : (
+                     <button 
+                       disabled={!isPerfectSplit}
+                       onClick={() => { alert('Bill Distributed Successfully!'); handleCloseModal(); }} 
+                       className="flex-1 py-4 bg-[#1e1b4b] text-white rounded-xl font-bold shadow-xl shadow-[#1e1b4b]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                     >
+                       <Check className="w-5 h-5" /> কনফার্ম ও সেন্ড করুন
+                     </button>
+                   )}
+                 </div>
+               </div>
+
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+    </div>
+  );
+}
