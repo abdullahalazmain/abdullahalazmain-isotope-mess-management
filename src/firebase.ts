@@ -1,5 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signOut,
+  updateProfile
+} from 'firebase/auth';
 
 // TODO: Replace these with your actual Firebase Project credentials
 // 1. Go to Firebase Console -> Project Settings -> General
@@ -21,4 +30,11 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Export auth functions for easier access
-export { signInWithPopup, signInWithEmailAndPassword };
+export { 
+  signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signOut,
+  updateProfile
+};

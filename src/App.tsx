@@ -834,26 +834,83 @@ const AuthModalContent = ({
   onSwitch: () => void,
   onLoginSuccess: (role: 'Manager' | 'Member', profile?: any) => void
 }) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const getBengaliError = (errorCode: string) => {
+    switch (errorCode) {
+      case 'auth/email-already-in-use': return 'এই ইমেইলটি ইতিমধ্যে ব্যবহৃত হচ্ছে।';
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password': return 'ইমেইল বা পাসওয়ার্ড সঠিক নয়।';
+      case 'auth/user-not-found': return 'এই ইমেইলের কোন একাউন্ট পাওয়া যায়নি।';
+      case 'auth/weak-password': return 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।';
+      case 'auth/too-many-requests': return 'অনেক বেশি চেষ্টা করা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।';
+      default: return 'একটি ত্রুটি ঘটেছে। দয়া করে আবার চেষ্টা করুন।';
+    }
+  };
+
+  const handleRegisterSubmit = async () => {
+    try {
+      setIsProcessing(true);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, { displayName: name });
+      await sendEmailVerification(userCredential.user);
+      alert('আপনার ইমেইলে ভেরিফিকেশন লিংক পাঠানো হয়েছে। দয়া করে চেক করুন!');
+      await signOut(auth);
+      onSwitch(); // Switch back to login
+    } catch (error: any) {
+      console.error(error);
+      alert(getBengaliError(error.code));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleLoginSubmit = async () => {
+    try {
+      setIsProcessing(true);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      if (!user.emailVerified) {
+        alert('দয়া করে আগে ইমেইল ভেরিফাই করুন। আপনার ইনবক্স চেক করুন।');
+        await signOut(auth);
+        return;
+      }
+
+      const profile = {
+        name: user.displayName || email.split('@')[0],
+        email: user.email || '',
+        photoURL: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
+      };
+
+      if (email === 'abdullahalazmain1@gmail.com') {
+        onLoginSuccess('Manager', profile);
+      } else {
+        onLoginSuccess('Member', profile);
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert(getBengaliError(error.code));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const profile = {
-      name: email.split('@')[0],
-      email: email,
-      photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
-    };
-    if (email === 'abdullahalazmain1@gmail.com' && password === '@12Azmain') {
-      onLoginSuccess('Manager', profile);
+    if (type === 'register') {
+      handleRegisterSubmit();
     } else {
-      // Any other user logs in as a regular member
-      onLoginSuccess('Member', profile);
+      handleLoginSubmit();
     }
   };
 
   const handleGoogleLogin = async () => {
     try {
+      setIsProcessing(true);
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const profile = {
@@ -871,8 +928,11 @@ const AuthModalContent = ({
     } catch (error: any) {
       console.error("Google Auth Error:", error);
       alert(`Google Login Failed: ${error.message}\n\nPlease check the console for details.`);
+    } finally {
+      setIsProcessing(false);
     }
   };
+
   return (
     <motion.div
       key={type}
@@ -906,26 +966,20 @@ const AuthModalContent = ({
           {type === 'register' && (
             <div>
               <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">আপনার নাম</label>
-              <input type="text" placeholder="উদাঃ আব্দুর রহমান" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+              <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={isProcessing} placeholder="উদাঃ আব্দুর রহমান" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400 disabled:opacity-50" required />
             </div>
           )}
           <div>
             <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">ইমেইল বা ফোন নম্বর</label>
-            <input type="text" value={email} onChange={e => setEmail(e.target.value)} placeholder="user@example.com" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={isProcessing} placeholder="user@example.com" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400 disabled:opacity-50" required />
           </div>
           <div>
             <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">পাসওয়ার্ড</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={isProcessing} placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400 disabled:opacity-50" required />
           </div>
-          {type === 'register' && (
-            <div>
-              <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">পাসওয়ার্ড নিশ্চিত করুন</label>
-              <input type="password" placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
-            </div>
-          )}
 
-          <button type="submit" className="w-full py-4 mt-2 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all">
-            {type === 'login' ? 'লগইন করুন' : 'একাউন্ট তৈরি করুন'}
+          <button type="submit" disabled={isProcessing} className="w-full py-4 mt-2 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:scale-100 flex justify-center items-center">
+            {isProcessing ? 'অপেক্ষা করুন...' : (type === 'login' ? 'লগইন করুন' : 'একাউন্ট তৈরি করুন')}
           </button>
         </form>
 
@@ -938,7 +992,8 @@ const AuthModalContent = ({
         <button
           onClick={handleGoogleLogin}
           type="button"
-          className="w-full py-3.5 px-5 bg-white border-2 border-slate-100 text-[#1e293b] font-bold rounded-2xl shadow-sm hover:bg-slate-50 hover:border-slate-200 transition-all flex items-center justify-center gap-3"
+          disabled={isProcessing}
+          className="w-full py-3.5 px-5 bg-white border-2 border-slate-100 text-[#1e293b] font-bold rounded-2xl shadow-sm hover:bg-slate-50 hover:border-slate-200 transition-all flex items-center justify-center gap-3 disabled:opacity-70"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -951,7 +1006,7 @@ const AuthModalContent = ({
 
         <p className="mt-8 text-center text-sm font-medium text-slate-500">
           {type === 'login' ? 'একাউন্ট নেই?' : 'ইতিমধ্যে একাউন্ট আছে?'}
-          <button onClick={onSwitch} className="ml-2 text-brand-primary font-bold hover:underline">
+          <button onClick={() => !isProcessing && onSwitch()} className="ml-2 text-brand-primary font-bold hover:underline" disabled={isProcessing}>
             {type === 'login' ? 'রেজিস্ট্রেশন করুন' : 'লগইন করুন'}
           </button>
         </p>
