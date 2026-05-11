@@ -187,6 +187,10 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                   }) 
                 : member.joinDate || 'N/A';
 
+              const profilePic = member.avatarSeed?.startsWith('http') 
+                ? member.avatarSeed 
+                : (member as any).photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`;
+
               return (
                 <motion.div 
                   whileHover={{ y: -5 }}
@@ -195,7 +199,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                   className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl shadow-slate-200/50 rounded-3xl p-6 cursor-pointer group hover:bg-white/90 transition-colors"
                 >
                   <div className="flex justify-between items-start mb-4">
-                    <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
+                    <img src={profilePic} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
                     <div className="flex flex-col items-end gap-2">
                       {member.role === 'Manager' ? (
                         <span className="px-3 py-1 bg-indigo-100 text-[#6366f1] rounded-full text-[10px] font-bold flex items-center gap-1">
@@ -223,14 +227,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
               );
             })}
 
-            {/* Quick Invite Card */}
-            <div className="bg-indigo-50/50 backdrop-blur-md border-2 border-dashed border-indigo-200 rounded-3xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-indigo-50 transition-colors">
-              <div className="w-12 h-12 bg-indigo-100 text-[#6366f1] rounded-full flex items-center justify-center mb-3">
-                <Copy className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-indigo-900">ইনভাইট কোড কপি করুন</h3>
-              <p className="text-xs text-indigo-400 font-medium mt-1">মেস আইডি: <span className="font-bold">{messId || 'N/A'}</span></p>
-            </div>
+
           </div>
         )}
 
@@ -326,19 +323,19 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                 {/* Header */}
                 <div className="bg-slate-50 p-6 flex justify-between items-start border-b border-slate-100 relative">
                   <div className="flex gap-4">
-                    <div className="relative">
-                      <img src={profilePic} className="w-20 h-20 rounded-2xl bg-white border-4 border-white shadow-md z-10 relative" />
-                      {selectedMember.role === 'Manager' && (
-                        <div className="absolute -bottom-2 -right-2 bg-[#6366f1] text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white z-20 shadow-sm">
-                          <Shield className="w-4 h-4" />
+                      <div className="relative">
+                        <img src={profilePic} className="w-20 h-20 rounded-2xl bg-white border-4 border-white shadow-md z-10 relative" />
+                        <div className={`absolute -bottom-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white z-20 shadow-sm ${selectedMember.role === 'Manager' ? 'bg-[#6366f1] text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          {selectedMember.role === 'Manager' ? <Shield className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                         </div>
-                      )}
-                    </div>
-                    <div className="pt-2">
-                      <h2 className="text-xl font-black text-slate-800 leading-none mb-1">{selectedMember.name}</h2>
-                      <p className="text-sm font-semibold text-slate-500 mb-2">{selectedMember.phone}</p>
-                      <span className="px-3 py-1 bg-slate-200/50 text-slate-600 rounded-full text-[10px] font-bold">যুক্ত হয়েছেন: {formattedTime}</span>
-                    </div>
+                      </div>
+                      <div className="pt-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h2 className="text-xl font-black text-slate-800 leading-none">{selectedMember.name}</h2>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-500 mb-2">{selectedMember.phone}</p>
+                        <span className="px-3 py-1 bg-slate-200/50 text-slate-600 rounded-full text-[10px] font-bold">যুক্ত হয়েছেন: {formattedTime}</span>
+                      </div>
                   </div>
                   <button onClick={handleCloseModal} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shadow-sm">
                     <X className="w-4 h-4" />
@@ -382,6 +379,16 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                           <div><p className="text-[10px] font-bold text-slate-400">জরুরী নাম্বার</p><p className="text-sm font-bold text-slate-700">{selectedMember.emergencyContact}</p></div>
                         </div>
                       </div>
+
+                      {/* Address Info */}
+                      {(selectedMember as any).address && (
+                        <>
+                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 mt-6">ঠিকানা (Address)</h3>
+                          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-4">
+                            <p className="text-sm font-bold text-slate-700 leading-relaxed">{(selectedMember as any).address}</p>
+                          </div>
+                        </>
+                      )}
 
                       {/* Manager Shield Button */}
                       {isManager && (
