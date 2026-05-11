@@ -196,11 +196,17 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                 >
                   <div className="flex justify-between items-start mb-4">
                     <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
-                    {member.role === 'Manager' && (
-                      <span className="px-3 py-1 bg-indigo-100 text-[#6366f1] rounded-full text-[10px] font-bold flex items-center gap-1">
-                        <Shield className="w-3 h-3" /> ম্যানেজার
-                      </span>
-                    )}
+                    <div className="flex flex-col items-end gap-2">
+                      {member.role === 'Manager' ? (
+                        <span className="px-3 py-1 bg-indigo-100 text-[#6366f1] rounded-full text-[10px] font-bold flex items-center gap-1">
+                          <Shield className="w-3 h-3" /> ম্যানেজার
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold flex items-center gap-1">
+                          <Users className="w-3 h-3" /> মেম্বার
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h3 className="text-lg font-black text-slate-800 mb-1">{member.name}</h3>
                   <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3"><Phone className="w-3 h-3" /> {member.phone || 'No Phone'}</p>
