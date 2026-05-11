@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { listenToUserMeals, listenToAllMessMeals, saveMeal } from './services/mealService';
+import type { MealRecord } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Utensils, ShoppingCart, Calculator, Calendar as CalendarIcon, 
@@ -16,13 +18,46 @@ const chartData = [
   { day: '7', meals: 29, market: 1800, rate: 62 },
 ];
 
-export default function MealsView({ isManager }: { isManager?: boolean }) {
-  const [isMarketDuty, setIsMarketDuty] = useState(true); // Toggle to test logic
+export default function MealsView({ isManager, messId, userId }: { isManager?: boolean, messId?: string, userId?: string }) {
+  const [isMarketDuty, setIsMarketDuty] = useState(false);
   const [hasShopped, setHasShopped] = useState<boolean | null>(null);
   const [marketDeadline, setMarketDeadline] = useState<string>('');
   
+  const [userMeals, setUserMeals] = useState<any[]>([]);
+  const [allMessMeals, setAllMessMeals] = useState<any[]>([]);
+  
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
+
+  const currentMonth = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
+
+  useEffect(() => {
+    if (!messId || !userId) return;
+
+    const unsub1 = listenToUserMeals(messId, userId, currentMonth, setUserMeals);
+    const unsub2 = listenToAllMessMeals(messId, currentMonth, setAllMessMeals);
+
+    return () => { unsub1(); unsub2(); };
+  }, [messId, userId]);
+
+  const handleSaveMeals = async (userName: string = 'User') => {
+    if (!messId || !userId || editingDays.length === 0) return;
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+
+    try {
+      for (const day of editingDays) {
+        const dateStr = `${year}-${month}-${day.toString().padStart(2, '0')}`;
+        await saveMeal(
+          messId, userId, userName, dateStr,
+          selfMeals.morning, selfMeals.lunch, selfMeals.dinner
+        );
+      }
+      closeModal();
+    } catch (error) {
+      console.error('Error saving meals:', error);
+    }
+  };
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDays, setEditingDays] = useState<number[]>([]);
@@ -237,7 +272,18 @@ export default function MealsView({ isManager }: { isManager?: boolean }) {
                       <Star className="w-5 h-5 fill-white text-white opacity-90 mb-1" />
                     </div>
                   ) : isPast ? (
-                    <span>{d % 5 === 0 ? '0' : d % 3 === 0 ? '1.5' : '2'}</span>
+                    <span>
+                      {(() => {
+                        const meal = userMeals.find(m => m.day === d);
+                        if (!meal) return '0';
+                        let count = 0;
+                        if (meal.selfMeals.morning) count += 0.5;
+                        if (meal.selfMeals.lunch) count += 1;
+                        if (meal.selfMeals.dinner) count += 1;
+                        const guestCount = (meal.guestMeals.morning * 0.5) + meal.guestMeals.lunch + meal.guestMeals.dinner;
+                        return count + guestCount;
+                      })()}
+                    </span>
                   ) : (
                     <Plus className={`w-6 h-6 ${isToday || isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white transition-colors'}`} />
                   )}
@@ -461,7 +507,7 @@ export default function MealsView({ isManager }: { isManager?: boolean }) {
               </div>
 
               <div className="p-6 pt-0 mt-2">
-                {isLocked ? <button onClick={closeModal} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold">ক্যানসেল</button> : <button onClick={closeModal} className="w-full py-4 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-xl flex items-center justify-center gap-2"><Check className="w-4 h-4" /> প্রসিড ও সেভ করুন</button>}
+                {isLocked ? <button onClick={closeModal} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold">ক্যানসেল</button> : <button onClick={handleSaveMeals} className="w-full py-4 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-xl flex items-center justify-center gap-2"><Check className="w-4 h-4" /> প্রসিড ও সেভ করুন</button>}
               </div>
             </motion.div>
           </div>

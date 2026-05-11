@@ -1,0 +1,136 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Helper functions
+    // ──────────────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isMessMember(messId) {
+      return isSignedIn() && getUserData().messId == messId;
+    }
+
+    function isMessManager(messId) {
+      return isMessMember(messId) && getUserData().role == 'Manager';
+    }
+
+    function incomingMessId() {
+      return request.resource.data.messId;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // users/{uid}
+    // ──────────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      // Anyone signed in can read their own profile
+      allow read: if isSignedIn() && isOwner(uid);
+
+      // Members of the same mess can read other members (for member list)
+      allow read: if isSignedIn() &&
+        resource.data.messId == getUserData().messId;
+
+      // A user can write their own profile
+      allow write: if isSignedIn() && isOwner(uid);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // messes/{messId}
+    // ──────────────────────────────────────────────────────────────────────
+    match /messes/{messId} {
+      // Any signed-in user can read a mess (needed for joining)
+      allow read: if isSignedIn();
+
+      // Only the creator (Manager) can write/update
+      allow create: if isSignedIn();
+      allow update: if isMessManager(messId);
+      allow delete: if isMessManager(messId);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // meals/{mealId}
+    // ──────────────────────────────────────────────────────────────────────
+    match /meals/{mealId} {
+      // Any mess member can read meals in their mess
+      allow read: if isSignedIn() && isMessMember(resource.data.messId);
+
+      // A member can create/update only their own meal records
+      allow create: if isSignedIn() &&
+        isMessMember(incomingMessId()) &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+        resource.data.userId == request.auth.uid;
+
+      allow delete: if isSignedIn() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // bazar/{bazarId}
+    // ──────────────────────────────────────────────────────────────────────
+    match /bazar/{bazarId} {
+      // Any mess member can read bazar records
+      allow read: if isSignedIn() && isMessMember(resource.data.messId);
+
+      // Members can submit their own bazar
+      allow create: if isSignedIn() &&
+        isMessMember(incomingMessId()) &&
+        request.resource.data.submittedBy == request.auth.uid;
+
+      // Manager can approve/reject; submitter can edit while Pending
+      allow update: if isSignedIn() && (
+        isMessManager(resource.data.messId) ||
+        (resource.data.submittedBy == request.auth.uid &&
+         resource.data.status == 'Pending')
+      );
+
+      allow delete: if isMessManager(resource.data.messId);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // bills/{billId}
+    // ──────────────────────────────────────────────────────────────────────
+    match /bills/{billId} {
+      // Any mess member can read bills
+      allow read: if isSignedIn() && isMessMember(resource.data.messId);
+
+      // Only manager can create bills
+      allow create: if isSignedIn() && isMessManager(incomingMessId());
+
+      // Manager can fully update; members can only update isPaid in their split
+      allow update: if isSignedIn() && (
+        isMessManager(resource.data.messId) ||
+        isMessMember(resource.data.messId)  // simplified: service layer enforces split-only update
+      );
+
+      allow delete: if isMessManager(resource.data.messId);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // notices/{noticeId}
+    // ──────────────────────────────────────────────────────────────────────
+    match /notices/{noticeId} {
+      // Mess members can read notices
+      allow read: if isSignedIn() && isMessMember(resource.data.messId);
+
+      // Only manager can create notices
+      allow create: if isSignedIn() && isMessManager(incomingMessId());
+
+      // Manager can update/delete; members can update readBy/hiddenBy
+      allow update: if isSignedIn() && isMessMember(resource.data.messId);
+      allow delete: if isMessManager(resource.data.messId);
+    }
+  }
+}

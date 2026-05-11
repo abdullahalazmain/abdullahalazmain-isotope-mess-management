@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { db, collection, query, where, onSnapshot, doc, updateDoc } from './firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, UserMinus, UserPlus, Shield, X, Phone, Droplet, 
@@ -47,11 +48,54 @@ const mockPendingRequests = [
   { id: '5', name: 'Sajid Ali', requestDate: 'Today, 10:30 AM', phone: '01844-444444', avatarSeed: 'Sajid' }
 ];
 
-export default function MembersView({ isManager }: { isManager: boolean }) {
+export default function MembersView({ isManager, messId }: { isManager: boolean, messId?: string }) {
   const [activeTab, setActiveTab] = useState<'active' | 'former' | 'pending'>('active');
+  const [members, setMembers] = useState<Member[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showManagerControls, setShowManagerControls] = useState(false);
   const [showTransferConfirm, setShowTransferConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!messId) return;
+
+    // 1. Listen to active members
+    const membersQuery = query(collection(db, 'users'), where('messId', '==', messId));
+    const unsubscribeMembers = onSnapshot(membersQuery, (snapshot) => {
+      const membersList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Member[];
+      setMembers(membersList);
+    });
+
+    // 2. Listen to pending requests
+    const requestsQuery = query(collection(db, 'messes', messId, 'requests'));
+    const unsubscribeRequests = onSnapshot(requestsQuery, (snapshot) => {
+      const requestsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPendingRequests(requestsList);
+    });
+
+    return () => {
+      unsubscribeMembers();
+      unsubscribeRequests();
+    };
+  }, [messId]);
+
+  const handleUpdateRole = async (memberId: string, newRole: string) => {
+    try {
+      const memberRef = doc(db, 'users', memberId);
+      await updateDoc(memberRef, { role: newRole });
+      if (selectedMember && selectedMember.id === memberId) {
+        setSelectedMember({ ...selectedMember, role: newRole as any });
+      }
+    } catch (error) {
+      console.error("Error updating role:", error);
+    }
+  };
 
   const handleCloseModal = () => {
     setSelectedMember(null);
@@ -103,7 +147,7 @@ export default function MembersView({ isManager }: { isManager: boolean }) {
         {/* ACTIVE MEMBERS TAB */}
         {activeTab === 'active' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {mockMembers.map(member => (
+            {members.map(member => (
               <motion.div 
                 whileHover={{ y: -5 }}
                 key={member.id} 
@@ -111,7 +155,7 @@ export default function MembersView({ isManager }: { isManager: boolean }) {
                 className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl shadow-slate-200/50 rounded-3xl p-6 cursor-pointer group hover:bg-white/90 transition-colors"
               >
                 <div className="flex justify-between items-start mb-4">
-                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed}`} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
+                  <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
                   {member.role === 'Manager' && (
                     <span className="px-3 py-1 bg-indigo-100 text-[#6366f1] rounded-full text-[10px] font-bold flex items-center gap-1">
                       <Shield className="w-3 h-3" /> ম্যানেজার
@@ -119,9 +163,9 @@ export default function MembersView({ isManager }: { isManager: boolean }) {
                   )}
                 </div>
                 <h3 className="text-lg font-black text-slate-800 mb-1">{member.name}</h3>
-                <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3"><Phone className="w-3 h-3" /> {member.phone}</p>
+                <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3"><Phone className="w-3 h-3" /> {member.phone || 'No Phone'}</p>
                 <div className="pt-3 border-t border-slate-100/80 flex justify-between items-center">
-                  <p className="text-[10px] font-bold text-slate-400">যুক্ত হয়েছেন: <br/><span className="text-slate-600">{member.joinDate}</span></p>
+                  <p className="text-[10px] font-bold text-slate-400">যুক্ত হয়েছেন: <br/><span className="text-slate-600">{member.joinDate || 'N/A'}</span></p>
                   <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-[#6366f1] group-hover:text-white transition-colors">
                     <ChevronRight className="w-4 h-4" />
                   </div>
@@ -135,7 +179,7 @@ export default function MembersView({ isManager }: { isManager: boolean }) {
                 <Copy className="w-5 h-5" />
               </div>
               <h3 className="text-sm font-bold text-indigo-900">ইনভাইট কোড কপি করুন</h3>
-              <p className="text-xs text-indigo-400 font-medium mt-1">মেস আইডি: <span className="font-bold">MESS-1234</span></p>
+              <p className="text-xs text-indigo-400 font-medium mt-1">মেস আইডি: <span className="font-bold">{messId || 'N/A'}</span></p>
             </div>
           </div>
         )}
@@ -170,24 +214,28 @@ export default function MembersView({ isManager }: { isManager: boolean }) {
         {/* PENDING REQUESTS TAB */}
         {activeTab === 'pending' && isManager && (
           <div className="flex flex-col gap-4 max-w-2xl">
-            {mockPendingRequests.map(req => (
-              <div key={req.id} className="bg-white/80 backdrop-blur-md border border-emerald-100 shadow-lg rounded-3xl p-5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${req.avatarSeed}`} className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-white shadow-sm" />
-                  <div>
-                    <h3 className="font-bold text-slate-800">{req.name}</h3>
-                    <p className="text-xs font-semibold text-slate-500">{req.phone}</p>
-                    <p className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-1">Request: {req.requestDate}</p>
+            {pendingRequests.length === 0 ? (
+              <p className="text-slate-500 font-semibold text-center py-10 bg-white/50 rounded-3xl border border-dashed border-slate-200">কোন রিকোয়েস্ট নেই</p>
+            ) : (
+              pendingRequests.map(req => (
+                <div key={req.id} className="bg-white/80 backdrop-blur-md border border-emerald-100 shadow-lg rounded-3xl p-5 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <img src={req.avatarSeed?.startsWith('http') ? req.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.avatarSeed || req.name}`} className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-white shadow-sm" />
+                    <div>
+                      <h3 className="font-bold text-slate-800">{req.name}</h3>
+                      <p className="text-xs font-semibold text-slate-500">{req.phone || 'No Phone'}</p>
+                      <p className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-1">Request: {req.requestDate}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors">বাতিল করুন</button>
+                    <button className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors flex items-center gap-1">
+                      <Check className="w-4 h-4" /> যুক্ত করুন
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors">বাতিল করুন</button>
-                  <button className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors flex items-center gap-1">
-                    <Check className="w-4 h-4" /> যুক্ত করুন
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
@@ -286,7 +334,10 @@ export default function MembersView({ isManager }: { isManager: boolean }) {
                     <div className="flex flex-col gap-4">
                       <div className="border border-slate-200 rounded-2xl p-4">
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Assign Role</label>
-                        <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm font-bold rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20">
+                        <select 
+                          onChange={(e) => handleUpdateRole(selectedMember.id, e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm font-bold rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
+                        >
                           <option value="Member" selected={selectedMember.role === 'Member'}>General Member</option>
                           <option value="Manager" selected={selectedMember.role === 'Manager'}>Manager (Admin)</option>
                         </select>

@@ -5,10 +5,41 @@ import {
   Trash2, ShieldAlert, LogOut, Check, ArrowRight
 } from 'lucide-react';
 
-export default function SettingsView({ isManager }: { isManager: boolean }) {
+import { db, doc, updateDoc, getDoc } from './firebase';
+
+export default function SettingsView({ isManager, messId, userProfile }: { isManager: boolean, messId?: string, userProfile?: any }) {
   const [messName, setMessName] = useState('Isotope Mess');
   const [joinPassword, setJoinPassword] = useState('12345');
   const [isCopied, setIsCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (!messId) return;
+    const fetchMess = async () => {
+      const messDoc = await getDoc(doc(db, 'messes', messId));
+      if (messDoc.exists()) {
+        const data = messDoc.data();
+        setMessName(data.name || 'Isotope Mess');
+        setJoinPassword(data.password || '12345');
+      }
+    };
+    fetchMess();
+  }, [messId]);
+
+  const handleSaveProfile = async () => {
+    if (!messId || !isManager) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'messes', messId), {
+        name: messName
+      });
+      alert('মেস প্রোফাইল আপডেট করা হয়েছে।');
+    } catch (error) {
+      console.error("Error updating mess profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCopyPassword = () => {
     navigator.clipboard.writeText(joinPassword);
@@ -55,7 +86,13 @@ export default function SettingsView({ isManager }: { isManager: boolean }) {
               </div>
               
               {isManager && (
-                <button className="px-6 py-3 bg-[#6366f1] text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-colors">প্রোফাইল সেভ করুন</button>
+                <button 
+                  onClick={handleSaveProfile}
+                  disabled={loading}
+                  className="px-6 py-3 bg-[#6366f1] text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'সেভ হচ্ছে...' : 'প্রোফাইল সেভ করুন'}
+                </button>
               )}
             </div>
           </div>
@@ -71,10 +108,10 @@ export default function SettingsView({ isManager }: { isManager: boolean }) {
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">মেস আইডি (Mess ID)</label>
                 <div className="flex items-center gap-2 mt-1">
                   <input 
-                    type="text" value="i12345" disabled
+                    type="text" value={messId || 'N/A'} disabled
                     className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl focus:outline-none disabled:opacity-70" 
                   />
-                  <button onClick={() => { navigator.clipboard.writeText('i12345'); }} className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
+                  <button onClick={() => { if (messId) navigator.clipboard.writeText(messId); }} className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
                     <Copy className="w-5 h-5" />
                   </button>
                 </div>

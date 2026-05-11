@@ -29,7 +29,25 @@ import {
   ArrowRight,
   LogOut
 } from "lucide-react";
-import { auth, googleProvider, signInWithPopup } from './firebase';
+import { 
+  auth, 
+  googleProvider, 
+  signInWithPopup, 
+  db, 
+  doc, 
+  setDoc, 
+  updateDoc,
+  getDoc,
+  serverTimestamp 
+} from './firebase';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  updateProfile, 
+  sendEmailVerification, 
+  signOut 
+} from 'firebase/auth';
 
 
 /**
@@ -104,7 +122,14 @@ const Navbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick, onDash
                       <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
                       <div>
                         <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
-                        <p className="text-xs text-slate-500">{userProfile?.email || 'user@example.com'}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[10px] text-slate-500">{userProfile?.email || 'user@example.com'}</p>
+                          {userProfile?.role && (
+                            <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter ${userProfile.role === 'Manager' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                              {userProfile.role === 'Manager' ? 'ম্যানেজার' : 'মেম্বার'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <button onClick={() => { setIsProfileOpen(false); onDashboardClick(); }} className="flex items-center gap-3 w-full p-3 hover:bg-brand-primary/5 rounded-xl text-left font-semibold text-[#1e293b] transition-colors">
@@ -162,7 +187,14 @@ const Navbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick, onDash
                     <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
                     <div>
                       <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
-                      <p className="text-xs text-slate-500">{userProfile?.email || 'user@example.com'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] text-slate-500">{userProfile?.email || 'user@example.com'}</p>
+                        {userProfile?.role && (
+                          <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${userProfile.role === 'Manager' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {userProfile.role === 'Manager' ? 'ম্যানেজার' : 'মেম্বার'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <button onClick={() => { setIsOpen(false); onDashboardClick(); }} className="flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary/10 text-brand-primary rounded-xl font-bold w-full">
@@ -914,17 +946,29 @@ const AuthModalContent = ({
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const profile = {
+        uid: user.uid,
         name: user.displayName || 'গুগল ইউজার',
         email: user.email || '',
-        photoURL: user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser'
+        photoURL: user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser',
+        lastLogin: serverTimestamp()
       };
       
-      const userEmail = user.email;
-      if (userEmail === 'abdullahalazmain1@gmail.com') {
-        onLoginSuccess('Manager', profile);
+      // Sync with Firestore
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        await setDoc(userRef, {
+          ...profile,
+          role: user.email === 'abdullahalazmain1@gmail.com' ? 'Manager' : 'Member',
+          createdAt: serverTimestamp()
+        });
       } else {
-        onLoginSuccess('Member', profile);
+        await setDoc(userRef, profile, { merge: true });
       }
+
+      const role = (userSnap.exists() ? userSnap.data().role : (user.email === 'abdullahalazmain1@gmail.com' ? 'Manager' : 'Member')) as 'Manager' | 'Member';
+      onLoginSuccess(role, { ...profile, role });
     } catch (error: any) {
       console.error("Google Auth Error:", error);
       alert(`Google Login Failed: ${error.message}\n\nPlease check the console for details.`);
@@ -1016,21 +1060,101 @@ const AuthModalContent = ({
 };
 
 const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
-  const [view, setView] = useState<'decision' | 'join'>('decision');
+  const [view, setView] = useState<'decision' | 'join' | 'create'>('decision');
   const [messId, setMessId] = useState('');
   const [messPassword, setMessPassword] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [newMessName, setNewMessName] = useState('');
+  const [newMessPassword, setNewMessPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleJoinSubmit = (e: React.FormEvent) => {
+  const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (messId === 'i12345' && messPassword === '12345') {
+    setIsProcessing(true);
+    try {
+      const messRef = doc(db, 'messes', messId);
+      const messSnap = await getDoc(messRef);
+      
+      if (messSnap.exists()) {
+        const messData = messSnap.data();
+        if (messData.password === messPassword) {
+          // Join mess
+          const user = auth.currentUser;
+          if (user) {
+            const role = messData.creatorUid === user.uid ? 'Manager' : 'Member';
+            await updateDoc(doc(db, 'users', user.uid), {
+              messId: messId,
+              role: role,
+              joinedAt: serverTimestamp()
+            });
+            window.location.href = '/dashboard.html';
+          }
+        } else {
+          alert("ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন।");
+        }
+      } else {
+        alert("এই মেস আইডি-টি পাওয়া যায়নি।");
+      }
+    } catch (error) {
+      console.error("Join Error:", error);
+      alert("একটি ত্রুটি ঘটেছে। দয়া করে আবার চেষ্টা করুন।");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+
+  const generateMessId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let id = '';
+    for (let i = 0; i < 6; i++) {
+      id += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return id;
+  };
+
+  const handleCreateMessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMessPassword !== confirmPassword) {
+      alert("পাসওয়ার্ড মেলেনি!");
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      const generatedId = generateMessId();
+      const user = auth.currentUser;
+      
+      if (!user) throw new Error("No authenticated user");
+
+      // 1. Create Mess Document
+      await setDoc(doc(db, 'messes', generatedId), {
+        name: newMessName,
+        password: newMessPassword,
+        creatorUid: user.uid,
+        createdAt: serverTimestamp(),
+        membersCount: 1
+      });
+
+      // 2. Update User Profile
+      await updateDoc(doc(db, 'users', user.uid), {
+        messId: generatedId,
+        role: 'Manager',
+        joinedAt: serverTimestamp()
+      });
+
       window.location.href = '/dashboard.html';
-    } else {
-      alert("Test Validation Failed: Please use Mess ID 'i12345' and Password '12345' to test the website.");
+    } catch (error) {
+      console.error("Create Mess Error:", error);
+      alert("একটি ত্রুটি ঘটেছে। দয়া করে আবার চেষ্টা করুন।");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleCreateMess = () => {
-    alert("নতুন মেস তৈরি করার ফিচারটি আপাতত বন্ধ আছে। টেস্ট করার জন্য 'মেসে জয়েন করুন' অপশনটি ব্যবহার করুন।");
+    setView('create');
   };
 
   return (
@@ -1041,7 +1165,7 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
       transition={{ duration: 0.3, type: 'spring', bounce: 0.2 }}
       className="relative w-full max-w-3xl bg-white/90 backdrop-blur-2xl rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_rgba(81,68,177,0.3)] border border-white overflow-hidden max-h-[90vh] overflow-y-auto no-scrollbar"
     >
-      {view === 'join' && (
+      {(view === 'join' || view === 'create') && (
         <button onClick={() => setView('decision')} className="absolute top-6 left-6 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors z-20">
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -1097,7 +1221,7 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
             </motion.button>
           </div>
         </>
-      ) : (
+      ) : view === 'join' ? (
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -1114,22 +1238,62 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
           <form className="flex flex-col gap-4" onSubmit={handleJoinSubmit}>
             <div>
               <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">মেস আইডি</label>
-              <input type="text" value={messId} onChange={e => setMessId(e.target.value)} placeholder="উদাঃ i12345" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+              <input type="text" value={messId} onChange={e => setMessId(e.target.value)} disabled={isProcessing} placeholder="উদাঃ i12345" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
             </div>
             <div>
               <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">পাসওয়ার্ড</label>
-              <input type="password" value={messPassword} onChange={e => setMessPassword(e.target.value)} placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+              <input type="password" value={messPassword} onChange={e => setMessPassword(e.target.value)} disabled={isProcessing} placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
             </div>
 
-            <button type="submit" className="w-full py-4 mt-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all">
-              জয়েন করুন
+            <button type="submit" disabled={isProcessing} className="w-full py-4 mt-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70">
+              {isProcessing ? 'অপেক্ষা করুন...' : 'জয়েন করুন'}
             </button>
           </form>
 
           <p className="mt-8 text-center text-sm font-medium text-slate-500">
             বিদ্যমান কোন মেস নেই?
-            <button onClick={onClose} className="ml-2 text-emerald-500 font-bold hover:underline">
+            <button onClick={() => setView('create')} className="ml-2 text-emerald-500 font-bold hover:underline">
               নতুন মেস তৈরি করুন
+            </button>
+          </p>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="relative z-10 max-w-md mx-auto"
+        >
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
+              <Plus className="w-8 h-8 text-emerald-500" />
+            </div>
+            <h2 className="text-2xl md:text-3xl font-black text-[#1e293b] mb-2 text-center">নতুন মেস তৈরি করুন</h2>
+            <p className="text-[#64748b] font-medium text-center">ম্যানেজার হিসেবে আপনার মেস পরিচালনা শুরু করুন</p>
+          </div>
+
+          <form className="flex flex-col gap-4" onSubmit={handleCreateMessSubmit}>
+            <div>
+              <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">মেসের নাম</label>
+              <input type="text" value={newMessName} onChange={e => setNewMessName(e.target.value)} disabled={isProcessing} placeholder="উদাঃ ইকো মেস" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">জয়েনিং পাসওয়ার্ড</label>
+              <input type="password" value={newMessPassword} onChange={e => setNewMessPassword(e.target.value)} disabled={isProcessing} placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-[#1e293b] mb-1.5 ml-1">পাসওয়ার্ড নিশ্চিত করুন</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={isProcessing} placeholder="••••••••" className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all font-medium placeholder:text-slate-400" required />
+            </div>
+
+            <button type="submit" disabled={isProcessing} className="w-full py-4 mt-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70">
+              {isProcessing ? 'তৈরি হচ্ছে...' : 'মেস তৈরি করুন'}
+            </button>
+          </form>
+
+          <p className="mt-8 text-center text-sm font-medium text-slate-500">
+            ইতিমধ্যে মেস আছে?
+            <button onClick={() => setView('join')} className="ml-2 text-brand-primary font-bold hover:underline">
+              মেসে জয়েন করুন
             </button>
           </p>
         </motion.div>
@@ -1146,19 +1310,47 @@ export default function App() {
   });
   const [activeModal, setActiveModal] = useState<'login' | 'register' | 'decision' | null>(null);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setIsLoggedIn(true);
+        // Fetch fresh profile from Firestore
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          setUserProfile(data);
+          localStorage.setItem('userProfile', JSON.stringify(data));
+          localStorage.setItem('userRole', data.role);
+        }
+      } else {
+        setIsLoggedIn(false);
+        setUserProfile(null);
+        localStorage.removeItem('userProfile');
+        localStorage.removeItem('userRole');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleLoginSuccess = (role: 'Manager' | 'Member', profile?: any) => {
-    localStorage.setItem('userRole', role);
     if (profile) {
-      localStorage.setItem('userProfile', JSON.stringify(profile));
       setUserProfile(profile);
+      localStorage.setItem('userProfile', JSON.stringify(profile));
+      localStorage.setItem('userRole', role);
     }
     setIsLoggedIn(true);
     setActiveModal('decision');
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setActiveModal(null);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setIsLoggedIn(false);
+      setActiveModal(null);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   return (

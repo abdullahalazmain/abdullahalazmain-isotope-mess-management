@@ -5,25 +5,8 @@ import {
   Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-
-interface BazarItem {
-  id: string;
-  name: string;
-  rate: string;
-  qty: string;
-  total: string;
-}
-
-interface BazarRecord {
-  id: string;
-  date: string;
-  shopperName: string;
-  amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  rejectedReason?: string;
-  hasReceipt: boolean;
-  items: BazarItem[];
-}
+import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar } from './services/bazarService';
+import type { BazarRecord, BazarItem } from './types';
 
 const mockBudgetChart = [
   { name: 'James (You)', budget: 5000, spent: 4200 },
@@ -33,7 +16,7 @@ const mockBudgetChart = [
 
 const initialRecords: BazarRecord[] = [
   {
-    id: '1', date: 'May 12, 2024 - 10:30 AM', shopperName: 'James Doe', amount: 1250, status: 'Pending', hasReceipt: true,
+    id: '1', messId: 'm1', submittedBy: 'u1', date: 'May 12, 2024 - 10:30 AM', month: '2024-05', submitterName: 'James Doe', totalAmount: 1250, status: 'Pending', hasReceipt: true,
     items: [
       { id: 'i1', name: 'চাল', rate: '70', qty: '5 kg', total: '350' },
       { id: 'i2', name: 'মুরগি', rate: '220', qty: '2 kg', total: '440' },
@@ -41,7 +24,7 @@ const initialRecords: BazarRecord[] = [
     ]
   },
   {
-    id: '2', date: 'May 10, 2024 - 09:15 AM', shopperName: 'Rahim Uddin', amount: 850, status: 'Approved', hasReceipt: false,
+    id: '2', messId: 'm1', submittedBy: 'u2', date: 'May 10, 2024 - 09:15 AM', month: '2024-05', submitterName: 'Rahim Uddin', totalAmount: 850, status: 'Approved', hasReceipt: false,
     items: [
       { id: 'i4', name: 'ডিম', rate: '12', qty: '30 pcs', total: '360' },
       { id: 'i5', name: 'মাছ', rate: '250', qty: '1.5 kg', total: '375' },
@@ -50,22 +33,31 @@ const initialRecords: BazarRecord[] = [
   }
 ];
 
-export default function BazarView({ isManager }: { isManager?: boolean }) {
+export default function BazarView({ isManager, messId, userId, userName }: { isManager?: boolean, messId?: string, userId?: string, userName?: string }) {
   const [isMarketDuty, setIsMarketDuty] = useState(true); 
-  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  
+  const [records, setRecords] = useState<BazarRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<BazarRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const currentMonth = new Date().toISOString().substring(0, 7);
+
+  useEffect(() => {
+    if (!messId) return;
+    const unsub = listenToBazarRecords(messId, currentMonth, (recs) => {
+      setRecords(recs);
+      setLoading(false);
+    });
+    return unsub;
+  }, [messId]);
+
   const [bazarDate, setBazarDate] = useState(new Date().toISOString().split('T')[0]);
   const [bazarTime, setBazarTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
   
   const [items, setItems] = useState<BazarItem[]>([{ id: '1', name: '', rate: '', qty: '', total: '' }]);
   const [receipt, setReceipt] = useState<string | null>(null);
-  
-  const [records, setRecords] = useState<BazarRecord[]>(initialRecords);
-  const [selectedRecord, setSelectedRecord] = useState<BazarRecord | null>(null);
 
-  // Manager States
   const [isDeclineModalOpen, setIsDeclineModalOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
@@ -85,26 +77,40 @@ export default function BazarView({ isManager }: { isManager?: boolean }) {
     else { setIsModalOpen(false); setShowCancelConfirm(false); setItems([{ id: '1', name: '', rate: '', qty: '', total: '' }]); setReceipt(null); }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const invalidItem = items.find(i => (i.name && !i.total) || (!i.name && i.total));
-    if (invalidItem) { alert("Validation Error: If you enter an item name, you must enter the total price."); return; }
-    alert("Bazar List Saved Successfully!");
-    handleCloseModal(true);
+    if (invalidItem) { alert('Validation Error: নাম দিলে দাম দিতে হবে।'); return; }
+    if (!messId || !userId) { alert('মেস কানেকশন নেই।'); return; }
+
+    try {
+      const totalAmount = calculateTotal();
+      await submitBazar(
+        messId, userId, userName || 'Unknown',
+        `${bazarDate} ${bazarTime}`,
+        items.filter(i => i.name), totalAmount, !!receipt
+      );
+      handleCloseModal(true);
+    } catch (err) {
+      console.error('Bazar submit error:', err);
+    }
   };
 
-  // Manager Actions
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedRecord) return;
-    setRecords(records.map(r => r.id === selectedRecord.id ? { ...r, status: 'Approved' } : r));
-    setSelectedRecord(null);
+    try {
+      await approveBazar(selectedRecord.id);
+      setSelectedRecord(null);
+    } catch (err) { console.error(err); }
   };
 
-  const handleDecline = () => {
+  const handleDecline = async () => {
     if (!selectedRecord || !declineReason) return;
-    setRecords(records.map(r => r.id === selectedRecord.id ? { ...r, status: 'Rejected', rejectedReason: declineReason } : r));
-    setIsDeclineModalOpen(false);
-    setSelectedRecord(null);
-    setDeclineReason('');
+    try {
+      await rejectBazar(selectedRecord.id, declineReason);
+      setIsDeclineModalOpen(false);
+      setSelectedRecord(null);
+      setDeclineReason('');
+    } catch (err) { console.error(err); }
   };
 
   useEffect(() => {
@@ -308,7 +314,7 @@ export default function BazarView({ isManager }: { isManager?: boolean }) {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mb-1"><CalendarIcon className="w-3 h-3" /> {record.date}</p>
-                <h3 className="text-lg font-black text-slate-800">{record.shopperName}</h3>
+                <h3 className="text-lg font-black text-slate-800">{record.submitterName}</h3>
               </div>
               <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 
                 ${record.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
@@ -323,7 +329,7 @@ export default function BazarView({ isManager }: { isManager?: boolean }) {
             <div className="flex justify-between items-end border-t border-slate-100 pt-4">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">মোট খরচ</p>
-                <p className="text-xl font-black text-[#6366f1]">৳ {record.amount}</p>
+                <p className="text-xl font-black text-[#6366f1]">৳ {record.totalAmount}</p>
               </div>
               <div className="flex items-center gap-2">
                 {record.status === 'Rejected' && !isManager && (
@@ -368,7 +374,7 @@ export default function BazarView({ isManager }: { isManager?: boolean }) {
               
               <div className="bg-slate-50 p-6 flex justify-between items-start border-b border-slate-100">
                 <div>
-                  <h2 className="text-xl font-black text-slate-800">{selectedRecord.shopperName} - এর বাজার</h2>
+                  <h2 className="text-xl font-black text-slate-800">{selectedRecord.submitterName} - এর বাজার</h2>
                   <p className="text-xs font-semibold text-slate-500 mt-1">{selectedRecord.date}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -422,7 +428,7 @@ export default function BazarView({ isManager }: { isManager?: boolean }) {
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col gap-4">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">সর্বমোট</span>
-                  <span className="text-2xl font-black text-[#6366f1]">৳ {selectedRecord.amount}</span>
+                  <span className="text-2xl font-black text-[#6366f1]">৳ {selectedRecord.totalAmount}</span>
                 </div>
                 
                 {isManager && selectedRecord.status === 'Pending' && (

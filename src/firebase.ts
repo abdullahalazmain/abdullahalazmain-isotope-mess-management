@@ -9,6 +9,23 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  onSnapshot, 
+  collection, 
+  query, 
+  where, 
+  addDoc, 
+  deleteDoc,
+  serverTimestamp,
+  Timestamp,
+  arrayUnion,
+  arrayRemove
+} from 'firebase/firestore';
 
 // TODO: Replace these with your actual Firebase Project credentials
 // 1. Go to Firebase Console -> Project Settings -> General
@@ -27,6 +44,7 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Export auth functions for easier access
@@ -36,5 +54,19 @@ export {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   signOut,
-  updateProfile
+  updateProfile,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  onSnapshot,
+  collection,
+  query,
+  where,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
+  Timestamp,
+  arrayUnion,
+  arrayRemove
 };

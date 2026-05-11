@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { auth, db, doc, onSnapshot, getDoc, collection, query, where } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   LayoutDashboard, 
   Workflow, 
@@ -145,7 +147,16 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile }: {
                 <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-indigo-100 bg-indigo-50" />
                 <div>
                   <h4 className="text-slate-800 font-bold text-sm">{userProfile?.name || 'গুগল ইউজার'}</h4>
-                  <p className="text-xs text-slate-500">{userProfile?.email || 'user@example.com'}</p>
+                  <div className="flex flex-col">
+                    <p className="text-[10px] text-slate-500 leading-tight">{userProfile?.email || 'user@example.com'}</p>
+                    {userProfile?.role && (
+                      <div className="mt-1">
+                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${userProfile.role === 'Manager' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                          {userProfile.role === 'Manager' ? 'ম্যানেজার' : 'মেম্বার'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <button onClick={() => window.location.href = '/'} className="flex items-center gap-3 w-full p-3 hover:bg-red-50 rounded-xl text-left font-semibold text-red-500 transition-colors mt-1">
@@ -237,6 +248,53 @@ export default function Dashboard() {
     return saved ? JSON.parse(saved) : null;
   });
   const [activeView, setActiveView] = useState('dashboard');
+  const [messData, setMessData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [dashboardNotices, setDashboardNotices] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // 1. Listen to user document
+        const userDocRef = doc(db, 'users', user.uid);
+        const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setUserProfile(data);
+            setIsManager(data.role === 'Manager');
+            localStorage.setItem('userRole', data.role);
+            localStorage.setItem('userProfile', JSON.stringify(data));
+
+            if (data.messId) {
+              const messDocRef = doc(db, 'messes', data.messId);
+              const unsubscribeMess = onSnapshot(messDocRef, (messSnap) => {
+                if (messSnap.exists()) setMessData(messSnap.data());
+              });
+
+              // 3. Listen to Notices for Dashboard
+              const noticesQuery = query(collection(db, 'notices'), where('messId', '==', data.messId));
+              const unsubscribeNotices = onSnapshot(noticesQuery, (snapshot) => {
+                const noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                noticesList.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                setDashboardNotices(noticesList.slice(0, 3));
+              });
+
+              return () => {
+                unsubscribeMess();
+                unsubscribeNotices();
+              };
+            }
+          }
+          setLoading(false);
+        });
+        return () => unsubscribeUser();
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
 
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -250,9 +308,9 @@ export default function Dashboard() {
         {/* View Toggle removed for production auth */}
 
         {activeView === 'members' ? (
-          <MembersView isManager={isManager} />
+          <MembersView isManager={isManager} messId={userProfile?.messId} />
         ) : activeView === 'meals' ? (
-          <MealsView isManager={isManager} />
+          <MealsView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} />
         ) : activeView === 'bazar' ? (
           <BazarView isManager={isManager} />
         ) : activeView === 'payments' ? (
@@ -260,9 +318,9 @@ export default function Dashboard() {
         ) : activeView === 'summary' ? (
           <SummaryView isManager={isManager} />
         ) : activeView === 'notices' ? (
-          <NoticeView isManager={isManager} />
+          <NoticeView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} />
         ) : activeView === 'settings' ? (
-          <SettingsView isManager={isManager} />
+          <SettingsView isManager={isManager} messId={userProfile?.messId} userProfile={userProfile} />
         ) : (
           <>
             {/* 7.1 The Personal View */}
@@ -329,16 +387,22 @@ export default function Dashboard() {
             {/* C) Alerts & Duty Tracker */}
             <div className="flex flex-col gap-6">
               <div className="bg-gradient-to-br from-rose-50/80 to-orange-50/80 backdrop-blur-md border border-orange-100/50 shadow-xl rounded-3xl p-6">
-                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-4"><Bell className="w-5 h-5 text-orange-500" /> নোটিফিকেশন</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Bell className="w-5 h-5 text-orange-500" /> নোটিফিকেশন</h3>
+                  <button onClick={() => setActiveView('notices')} className="text-[10px] font-black text-orange-600 hover:underline uppercase tracking-widest">সব দেখুন</button>
+                </div>
                 <div className="flex flex-col gap-3">
-                  <div className="bg-white/80 p-3 rounded-xl border border-white shadow-sm">
-                    <p className="text-xs font-bold text-slate-700">খালার বিল ১০ তারিখের মধ্যে দিন!</p>
-                    <p className="text-[10px] text-slate-400 mt-1">ম্যানেজার • ২ ঘন্টা আগে</p>
-                  </div>
-                  <div className="bg-white/80 p-3 rounded-xl border border-white shadow-sm">
-                    <p className="text-xs font-bold text-slate-700">আগামীকাল আপনার বাজারের ডিউটি।</p>
-                    <p className="text-[10px] text-slate-400 mt-1">সিস্টেম • ৫ ঘন্টা আগে</p>
-                  </div>
+                  {dashboardNotices.map((notice) => (
+                    <div key={notice.id} className={`bg-white/80 p-3 rounded-xl border shadow-sm ${notice.isUrgent ? 'border-rose-200' : 'border-white'}`}>
+                      <p className={`text-xs font-bold ${notice.isUrgent ? 'text-rose-600' : 'text-slate-700'}`}>{notice.title}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        ম্যানেজার • {notice.createdAt ? new Date(notice.createdAt.seconds * 1000).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' }) : 'এখনই'}
+                      </p>
+                    </div>
+                  ))}
+                  {dashboardNotices.length === 0 && (
+                    <p className="text-xs font-bold text-slate-400 text-center py-4 italic">কোনো নতুন নোটিশ নেই</p>
+                  )}
                 </div>
               </div>
 
