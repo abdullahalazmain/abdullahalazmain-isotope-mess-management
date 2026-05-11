@@ -8,6 +8,9 @@ export interface UserProfile {
   photoURL?: string;
   messId?: string;
   role?: 'Manager' | 'Member';
+  phone?: string;
+  bloodGroup?: string;
+  emergencyContact?: string;
   joinedAt?: Timestamp;
   createdAt?: Timestamp;
 }
@@ -15,10 +18,13 @@ export interface UserProfile {
 // ─── Mess ────────────────────────────────────────────────────────────────────
 export interface Mess {
   id: string;
+  messId: string;
   name: string;
   password: string;
   creatorUid: string;
+  managerEmail: string;
   createdAt: Timestamp;
+  lastIdChange?: Timestamp;
   membersCount: number;
 }
 
@@ -30,10 +36,17 @@ export interface MealRecord {
   userName: string;
   date: string;       // "YYYY-MM-DD"
   month: string;      // "YYYY-MM"
-  breakfast: boolean;
-  lunch: boolean;
-  dinner: boolean;
-  totalMeals: number; // breakfast(0.5) + lunch(1) + dinner(1)
+  selfMeals: {
+    morning: boolean;
+    lunch: boolean;
+    dinner: boolean;
+  };
+  guestMeals: {
+    morning: number;
+    lunch: number;
+    dinner: number;
+  };
+  totalMeals: number; // self(0.5/1/1) + guest(counts)
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

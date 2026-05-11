@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { db, collection, query, where, onSnapshot } from './firebase';
 import { listenToUserMeals, listenToAllMessMeals, saveMeal } from './services/mealService';
 import type { MealRecord } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +19,7 @@ const chartData = [
   { day: '7', meals: 29, market: 1800, rate: 62 },
 ];
 
-export default function MealsView({ isManager, messId, userId }: { isManager?: boolean, messId?: string, userId?: string }) {
+export default function MealsView({ isManager, messId, userId, userName }: { isManager?: boolean, messId?: string, userId?: string, userName?: string }) {
   const [isMarketDuty, setIsMarketDuty] = useState(false);
   const [hasShopped, setHasShopped] = useState<boolean | null>(null);
   const [marketDeadline, setMarketDeadline] = useState<string>('');
@@ -28,6 +29,8 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
   
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [bazarRecords, setBazarRecords] = useState<any[]>([]);
 
   const currentMonth = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
 
@@ -37,7 +40,13 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
     const unsub1 = listenToUserMeals(messId, userId, currentMonth, setUserMeals);
     const unsub2 = listenToAllMessMeals(messId, currentMonth, setAllMessMeals);
 
-    return () => { unsub1(); unsub2(); };
+    // Listen to Bazar status for locking
+    const unsubBazar = onSnapshot(
+      query(collection(db, 'bazar'), where('messId', '==', messId), where('month', '==', currentMonth)),
+      (snap) => setBazarRecords(snap.docs.map(d => d.data()))
+    );
+
+    return () => { unsub1(); unsub2(); unsubBazar(); };
   }, [messId, userId]);
 
   const handleSaveMeals = async (userName: string = 'User') => {
@@ -48,9 +57,17 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
     try {
       for (const day of editingDays) {
         const dateStr = `${year}-${month}-${day.toString().padStart(2, '0')}`;
+        
+        // Check if day is locked by market
+        const isDayLocked = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done'));
+        if (isDayLocked) {
+          alert(`মে ${day} তারিখের বাজার সম্পন্ন হয়েছে। মিল পরিবর্তন করা সম্ভব নয়।`);
+          continue;
+        }
+
         await saveMeal(
           messId, userId, userName, dateStr,
-          selfMeals.morning, selfMeals.lunch, selfMeals.dinner
+          selfMeals, guestMeals
         );
       }
       closeModal();
@@ -78,18 +95,14 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
   const [selectedMember, setSelectedMember] = useState('');
 
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
-  const today = 15;
+  const today = new Date().getDate();
 
   const handleDayClick = (day: number) => {
     if (day < today && !multiSelectMode) return;
     
     if (multiSelectMode) {
       if (day < today) return;
-      if (selectedDays.includes(day)) {
-        setSelectedDays(selectedDays.filter(d => d !== day));
-      } else {
-        setSelectedDays([...selectedDays, day]);
-      }
+      toggleDaySelection(day);
     } else {
       if (isManager && day >= today) {
         setManagerActionDay(day);
@@ -98,6 +111,28 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
         setIsModalOpen(true);
       }
     }
+  };
+
+  const toggleDaySelection = (day: number) => {
+    if (day < today) return;
+    setSelectedDays(prev => 
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const handleMouseDown = (day: number) => {
+    if (!multiSelectMode || day < today) return;
+    setIsDragging(true);
+    toggleDaySelection(day);
+  };
+
+  const handleMouseEnter = (day: number) => {
+    if (!isDragging || day < today || selectedDays.includes(day)) return;
+    toggleDaySelection(day);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
   };
 
   const handleMultiEditSubmit = () => {
@@ -109,13 +144,20 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingDays([]);
+    setSelfMeals({ morning: false, lunch: true, dinner: true });
+    setGuestMeals({ morning: 0, lunch: 0, dinner: 0 });
     if (multiSelectMode) {
       setMultiSelectMode(false);
       setSelectedDays([]);
     }
   };
 
-  const isLocked = hasShopped === true;
+  const isLocked = (day: number) => {
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day.toString().padStart(2, '0')}`;
+    return bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done'));
+  };
 
   const updateGuestMeal = (type: 'morning' | 'lunch' | 'dinner', delta: number) => {
     if (isLocked) return;
@@ -256,16 +298,26 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
                 <div 
                   key={d} 
                   onClick={() => handleDayClick(d)}
+                  onMouseDown={() => handleMouseDown(d)}
+                  onMouseEnter={() => handleMouseEnter(d)}
+                  onMouseUp={handleMouseUp}
                   className={`
-                    aspect-square rounded-2xl flex items-center justify-center font-bold text-lg transition-all cursor-pointer relative overflow-hidden group
+                    aspect-square rounded-2xl flex items-center justify-center font-bold text-lg transition-all cursor-pointer relative overflow-hidden group select-none
                     ${isPast ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}
                     ${isToday && !isSpecial ? 'bg-[#6366f1] text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] ring-2 ring-indigo-200 ring-offset-2' : ''}
                     ${!isPast && !isToday && !isSelected && !isSpecial ? 'bg-white border border-slate-100 text-slate-700 hover:bg-[#6366f1] hover:text-white hover:shadow-lg' : ''}
                     ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 ring-2 ring-emerald-200 ring-offset-2 scale-95' : ''}
                     ${isSpecial ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_0_25px_rgba(245,158,11,0.6)] ring-2 ring-amber-200 ring-offset-2 z-10' : ''}
+                    ${isLocked(d) ? 'opacity-70 bg-slate-100' : ''}
                   `}
                 >
                   <span className={`absolute top-2 left-2 text-[10px] ${isToday || isSpecial ? 'opacity-80' : 'opacity-40'}`}>{d}</span>
+                  
+                  {isLocked(d) && (
+                    <div className="absolute top-2 right-2">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                    </div>
+                  )}
                   
                   {isSpecial ? (
                     <div className="flex flex-col items-center justify-center pt-2">
@@ -451,27 +503,28 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
                 <button onClick={closeModal} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 shadow-sm"><X className="w-4 h-4" /></button>
               </div>
 
-              {isLocked ? (
+              {editingDays.some(d => isLocked(d)) ? (
                  <div className="bg-rose-50 px-6 py-3 border-b border-rose-100 flex items-center gap-2 text-rose-600">
                    <AlertTriangle className="w-4 h-4" />
                    <p className="text-xs font-bold">বাজার হয়ে গিয়েছে। মিল এডিট করার সুযোগ নেই।</p>
                  </div>
-              ) : marketDeadline && hasShopped === false ? (
+              ) : (
                  <div className="bg-orange-50 px-6 py-3 border-b border-orange-100 flex items-center gap-2 text-orange-600">
                    <Clock className="w-4 h-4" />
                    <p className="text-[10px] font-bold uppercase tracking-wider">ডেডলাইন: {marketDeadline} এর মধ্যে কনফার্ম করুন</p>
                  </div>
-              ) : null}
+              )}
 
               <div className="p-6">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">নিজের মিল</h3>
                 <div className="flex justify-between gap-3 mb-6">
                   {([ { id: 'morning', label: 'সকাল', icon: '☀️' }, { id: 'lunch', label: 'দুপুর', icon: '🍲' }, { id: 'dinner', label: 'রাত', icon: '🌙' } ] as const).map(meal => {
                     const isActive = selfMeals[meal.id];
+                    const currentLocked = editingDays.some(d => isLocked(d));
                     return (
                       <button 
-                        key={meal.id} disabled={isLocked} onClick={() => !isLocked && setSelfMeals({ ...selfMeals, [meal.id]: !isActive })}
-                        className={`flex-1 flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all ${isActive ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-transparent text-slate-400'} ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        key={meal.id} disabled={currentLocked} onClick={() => !currentLocked && setSelfMeals({ ...selfMeals, [meal.id]: !isActive })}
+                        className={`flex-1 flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all ${isActive ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-transparent text-slate-400'} ${currentLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <span className="text-2xl mb-1">{meal.icon}</span>
                         <span className="text-xs font-bold">{meal.label}</span>
@@ -489,16 +542,19 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
                     {showGuestMeals && (
                       <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-white">
                         <div className="p-4 flex flex-col gap-4 border-t border-slate-100">
-                          {([ { id: 'morning', label: 'সকাল' }, { id: 'lunch', label: 'দুপুর' }, { id: 'dinner', label: 'রাত' } ] as const).map(meal => (
-                            <div key={meal.id} className="flex justify-between items-center">
-                              <span className="text-sm font-bold text-slate-600">{meal.label}</span>
-                              <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-1 border border-slate-200">
-                                <button disabled={isLocked || guestMeals[meal.id] === 0} onClick={() => updateGuestMeal(meal.id, -1)} className="w-8 h-8 rounded-lg bg-white flex justify-center items-center shadow-sm text-slate-500 hover:text-rose-500 disabled:opacity-50"><Minus className="w-4 h-4" /></button>
-                                <input type="number" value={guestMeals[meal.id]} disabled={isLocked} onChange={e => { if(!isLocked) setGuestMeals({ ...guestMeals, [meal.id]: parseInt(e.target.value) || 0 }) }} className="w-8 text-center font-black text-slate-800 bg-transparent focus:outline-none" />
-                                <button disabled={isLocked} onClick={() => updateGuestMeal(meal.id, 1)} className="w-8 h-8 rounded-lg bg-white flex justify-center items-center shadow-sm text-slate-500 hover:text-emerald-500 disabled:opacity-50"><Plus className="w-4 h-4" /></button>
+                          {([ { id: 'morning', label: 'সকাল' }, { id: 'lunch', label: 'দুপুর' }, { id: 'dinner', label: 'রাত' } ] as const).map(meal => {
+                            const currentLocked = editingDays.some(d => isLocked(d));
+                            return (
+                              <div key={meal.id} className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-slate-600">{meal.label}</span>
+                                <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-1 border border-slate-200">
+                                  <button disabled={currentLocked || guestMeals[meal.id] === 0} onClick={() => updateGuestMeal(meal.id, -1)} className="w-8 h-8 rounded-lg bg-white flex justify-center items-center shadow-sm text-slate-500 hover:text-rose-500 disabled:opacity-50"><Minus className="w-4 h-4" /></button>
+                                  <input type="number" value={guestMeals[meal.id]} disabled={currentLocked} onChange={e => { if(!currentLocked) setGuestMeals({ ...guestMeals, [meal.id]: parseInt(e.target.value) || 0 }) }} className="w-8 text-center font-black text-slate-800 bg-transparent focus:outline-none" />
+                                  <button disabled={currentLocked} onClick={() => updateGuestMeal(meal.id, 1)} className="w-8 h-8 rounded-lg bg-white flex justify-center items-center shadow-sm text-slate-500 hover:text-emerald-500 disabled:opacity-50"><Plus className="w-4 h-4" /></button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}
@@ -507,7 +563,7 @@ export default function MealsView({ isManager, messId, userId }: { isManager?: b
               </div>
 
               <div className="p-6 pt-0 mt-2">
-                {isLocked ? <button onClick={closeModal} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold">ক্যানসেল</button> : <button onClick={handleSaveMeals} className="w-full py-4 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-xl flex items-center justify-center gap-2"><Check className="w-4 h-4" /> প্রসিড ও সেভ করুন</button>}
+                {editingDays.some(d => isLocked(d)) ? <button onClick={closeModal} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold">ক্যানসেল</button> : <button onClick={() => handleSaveMeals(userName)} className="w-full py-4 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-xl flex items-center justify-center gap-2"><Check className="w-4 h-4" /> প্রসিড ও সেভ করুন</button>}
               </div>
             </motion.div>
           </div>

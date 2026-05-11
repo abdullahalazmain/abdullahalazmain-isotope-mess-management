@@ -57,17 +57,26 @@ export async function saveMeal(
   userId: string,
   userName: string,
   date: string,
-  breakfast: boolean,
-  lunch: boolean,
-  dinner: boolean
+  selfMeals: { morning: boolean; lunch: boolean; dinner: boolean },
+  guestMeals: { morning: number; lunch: number; dinner: number }
 ) {
   const month = date.substring(0, 7); // "YYYY-MM"
-  const totalMeals = (breakfast ? 0.5 : 0) + (lunch ? 1 : 0) + (dinner ? 1 : 0);
+  
+  // Calculate total
+  let totalMeals = 0;
+  if (selfMeals.morning) totalMeals += 0.5;
+  if (selfMeals.lunch) totalMeals += 1;
+  if (selfMeals.dinner) totalMeals += 1;
+  
+  totalMeals += (guestMeals.morning * 0.5);
+  totalMeals += guestMeals.lunch;
+  totalMeals += guestMeals.dinner;
+
   const id = mealDocId(messId, userId, date);
 
   await setDoc(doc(db, MEALS, id), {
     messId, userId, userName, date, month,
-    breakfast, lunch, dinner, totalMeals,
+    selfMeals, guestMeals, totalMeals,
     updatedAt: serverTimestamp()
   }, { merge: true });
 }

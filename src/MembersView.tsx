@@ -5,6 +5,7 @@ import {
   Users, UserMinus, UserPlus, Shield, X, Phone, Droplet, 
   Calendar, Check, Copy, AlertTriangle, ChevronRight, UserCog, ShoppingCart, ChevronLeft
 } from 'lucide-react';
+import { listenToMemberFinancials, MemberFinancials } from './services/financialService';
 
 interface Member {
   id: string;
@@ -55,6 +56,20 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showManagerControls, setShowManagerControls] = useState(false);
   const [showTransferConfirm, setShowTransferConfirm] = useState(false);
+  const [selectedMemberStats, setSelectedMemberStats] = useState<MemberFinancials | null>(null);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  useEffect(() => {
+    if (selectedMember && messId) {
+      const unsub = listenToMemberFinancials(messId, selectedMember.id, currentMonth, (stats) => {
+        setSelectedMemberStats(stats);
+      });
+      return unsub;
+    } else {
+      setSelectedMemberStats(null);
+    }
+  }, [selectedMember, messId]);
 
   useEffect(() => {
     if (!messId) return;
@@ -95,6 +110,18 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
     } catch (error) {
       console.error("Error updating role:", error);
     }
+  };
+
+  const handleApproveRequest = async (requestId: string, userData: any) => {
+    if (!messId) return;
+    try {
+      // 1. Update user document with messId
+      const userRef = doc(db, 'users', requestId);
+      await updateDoc(userRef, { messId, role: 'Member' });
+      // 2. Delete request
+      const requestRef = doc(db, 'messes', messId, 'requests', requestId);
+      await updateDoc(requestRef, { status: 'Approved' }); // Or delete
+    } catch (err) { console.error(err); }
   };
 
   const handleCloseModal = () => {
@@ -229,7 +256,10 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                   </div>
                   <div className="flex gap-2">
                     <button className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors">বাতিল করুন</button>
-                    <button className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors flex items-center gap-1">
+                    <button 
+                      onClick={() => handleApproveRequest(req.id, req)}
+                      className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors flex items-center gap-1"
+                    >
                       <Check className="w-4 h-4" /> যুক্ত করুন
                     </button>
                   </div>
@@ -285,16 +315,16 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                     <div className="grid grid-cols-2 gap-3 mb-6">
                       <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
                         <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">পরিশোধিত</p>
-                        <h4 className="text-xl font-black text-slate-800">৳ {selectedMember.stats.paid}</h4>
+                        <h4 className="text-xl font-black text-slate-800">৳ {selectedMemberStats?.totalPaid || 0}</h4>
                       </div>
                       <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
                         <p className="text-[10px] font-bold text-rose-600 uppercase mb-1">বকেয়া</p>
-                        <h4 className="text-xl font-black text-rose-500">৳ {selectedMember.stats.due}</h4>
+                        <h4 className="text-xl font-black text-rose-500">৳ {selectedMemberStats?.dueAmount || 0}</h4>
                       </div>
                       <div className="col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex justify-between items-center">
                         <div>
                           <p className="text-[10px] font-bold text-indigo-600 uppercase mb-1">মোট বাজার</p>
-                          <h4 className="text-xl font-black text-slate-800">৳ {selectedMember.stats.market}</h4>
+                          <h4 className="text-xl font-black text-slate-800">৳ {selectedMemberStats?.totalBazar || 0}</h4>
                         </div>
                         <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-indigo-500 shadow-sm"><ShoppingCart className="w-5 h-5" /></div>
                       </div>

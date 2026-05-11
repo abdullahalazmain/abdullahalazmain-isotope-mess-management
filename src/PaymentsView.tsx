@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, Home, Zap, MoreHorizontal, ChevronDown, Check, X, 
-  Plus, Users, Calculator, AlertTriangle, ChevronRight, User as UserIcon, Minus
+  Plus, Users, Calculator, AlertTriangle, ChevronRight, User as UserIcon, Minus, DollarSign
 } from 'lucide-react';
 import { listenToBills, createBill, markSplitAsPaid } from './services/billService';
+import { recordDeposit, listenToDeposits, Deposit } from './services/depositService';
 import type { Bill, BillCategory, BillSplit } from './types';
 
 interface MemberBill {
@@ -34,17 +35,21 @@ export default function PaymentsView({ isManager, messId, userId, userName, memb
   const [viewMode, setViewMode] = useState<'global' | 'personal'>('global');
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [loading, setLoading] = useState(true);
 
   const currentMonth = new Date().toISOString().substring(0, 7);
 
   useEffect(() => {
     if (!messId) return;
-    const unsub = listenToBills(messId, currentMonth, (data) => {
+    const unsubBills = listenToBills(messId, currentMonth, (data) => {
       setBills(data);
       setLoading(false);
     });
-    return unsub;
+    const unsubDeps = listenToDeposits(messId, currentMonth, (data) => {
+      setDeposits(data);
+    });
+    return () => { unsubBills(); unsubDeps(); };
   }, [messId]);
 
   // Add Bill Modal States
@@ -106,6 +111,22 @@ export default function PaymentsView({ isManager, messId, userId, userName, memb
     } catch (err) { console.error(err); }
   };
 
+  // Deposit Modal States
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState<number | ''>('');
+  const [selectedDepositMemberId, setSelectedDepositMemberId] = useState('');
+
+  const handleRecordDeposit = async () => {
+    if (!messId || !selectedDepositMemberId || !depositAmount) return;
+    const m = liveMembers.find(m => m.id === selectedDepositMemberId);
+    try {
+      await recordDeposit(messId, selectedDepositMemberId, m?.name || 'Unknown', Number(depositAmount), currentMonth);
+      setIsDepositModalOpen(false);
+      setDepositAmount('');
+      setSelectedDepositMemberId('');
+    } catch (err) { console.error(err); }
+  };
+
   // ── Derived stats ───────────────────────────────────────────────
   const rentBills   = bills.filter(b => b.category === 'rent');
   const utilityBills = bills.filter(b => b.category === 'utility');
@@ -137,12 +158,20 @@ export default function PaymentsView({ isManager, messId, userId, userName, memb
         </div>
         
         {isManager && (
-          <button 
-            onClick={() => setIsAddBillModalOpen(true)}
-            className="hidden md:flex px-6 py-3 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all items-center gap-2"
-          >
-            <Plus className="w-5 h-5" /> বিল যোগ করুন
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setIsDepositModalOpen(true)}
+              className="flex px-6 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-emerald-200/50 hover:bg-emerald-700 transition-all items-center gap-2"
+            >
+              <DollarSign className="w-5 h-5" /> টাকা জমা নিন
+            </button>
+            <button 
+              onClick={() => setIsAddBillModalOpen(true)}
+              className="hidden md:flex px-6 py-3 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all items-center gap-2"
+            >
+              <Plus className="w-5 h-5" /> বিল যোগ করুন
+            </button>
+          </div>
         )}
       </div>
 
@@ -474,6 +503,48 @@ export default function PaymentsView({ isManager, messId, userId, userName, memb
                </div>
 
              </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* RECORD DEPOSIT MODAL */}
+      <AnimatePresence>
+        {isDepositModalOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden">
+               <div className="bg-emerald-600 p-6 flex justify-between items-center text-white">
+                 <h2 className="text-xl font-black">টাকা জমা নিন (Deposit)</h2>
+                 <button onClick={() => setIsDepositModalOpen(false)} className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
+               </div>
+               <div className="p-6 space-y-6">
+                 <div>
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">মেম্বার সিলেক্ট করুন</label>
+                   <select 
+                     value={selectedDepositMemberId} 
+                     onChange={e => setSelectedDepositMemberId(e.target.value)}
+                     className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                   >
+                     <option value="">সিলেক্ট করুন...</option>
+                     {liveMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                   </select>
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">টাকার পরিমাণ</label>
+                   <div className="relative">
+                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">৳</span>
+                     <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0" className="w-full bg-slate-50 border border-slate-200 text-emerald-600 text-2xl font-black px-10 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                   </div>
+                 </div>
+                 <button 
+                   onClick={handleRecordDeposit}
+                   disabled={!selectedDepositMemberId || !depositAmount}
+                   className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold shadow-xl shadow-emerald-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                 >
+                   <Check className="w-5 h-5" /> জমা কনফার্ম করুন
+                 </button>
+               </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

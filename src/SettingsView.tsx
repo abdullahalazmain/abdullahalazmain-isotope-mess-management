@@ -2,16 +2,24 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Settings as SettingsIcon, Image as ImageIcon, Lock, Copy, Download, 
-  Trash2, ShieldAlert, LogOut, Check, ArrowRight
+  Trash2, ShieldAlert, LogOut, Check, ArrowRight, Edit2
 } from 'lucide-react';
 
-import { db, doc, updateDoc, getDoc } from './firebase';
+import { db, doc, updateDoc, getDoc, collection, query, where, getDocs, serverTimestamp } from './firebase';
 
-export default function SettingsView({ isManager, messId, userProfile }: { isManager: boolean, messId?: string, userProfile?: any }) {
+export default function SettingsView({ isManager, messId, userProfile, onLogout }: { 
+  isManager: boolean, 
+  messId?: string, 
+  userProfile?: any,
+  onLogout?: () => void
+}) {
   const [messName, setMessName] = useState('Isotope Mess');
   const [joinPassword, setJoinPassword] = useState('12345');
   const [isCopied, setIsCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editableMessId, setEditableMessId] = useState('');
+  const [lastIdChange, setLastIdChange] = useState<any>(null);
+  const [isEditingId, setIsEditingId] = useState(false);
 
   React.useEffect(() => {
     if (!messId) return;
@@ -21,6 +29,8 @@ export default function SettingsView({ isManager, messId, userProfile }: { isMan
         const data = messDoc.data();
         setMessName(data.name || 'Isotope Mess');
         setJoinPassword(data.password || '12345');
+        setEditableMessId(data.messId || messId || '');
+        setLastIdChange(data.lastIdChange);
       }
     };
     fetchMess();
@@ -45,6 +55,47 @@ export default function SettingsView({ isManager, messId, userProfile }: { isMan
     navigator.clipboard.writeText(joinPassword);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const calculateCooldown = () => {
+    if (!lastIdChange) return 0;
+    const lastChange = lastIdChange.toDate();
+    const now = new Date();
+    const diff = now.getTime() - lastChange.getTime();
+    const days = 30 - (diff / (1000 * 60 * 60 * 24));
+    return days > 0 ? Math.ceil(days) : 0;
+  };
+
+  const handleUpdateMessId = async () => {
+    if (!messId || !isManager || !editableMessId) return;
+    const cooldown = calculateCooldown();
+    if (cooldown > 0) {
+      alert(`আপনি ৩০ দিনে একবার আইডি পরিবর্তন করতে পারবেন। আরও ${cooldown} দিন অপেক্ষা করুন।`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Check uniqueness
+      const q = query(collection(db, 'messes'), where('messId', '==', editableMessId));
+      const snap = await getDocs(q);
+      if (!snap.empty && snap.docs[0].id !== messId) {
+        alert("এই আইডি-টি ইতিমধ্যে অন্য কেউ ব্যবহার করছে। ভিন্ন আইডি ট্রাই করুন।");
+        return;
+      }
+
+      await updateDoc(doc(db, 'messes', messId), {
+        messId: editableMessId,
+        lastIdChange: serverTimestamp()
+      });
+      setLastIdChange({ toDate: () => new Date() }); // Optimistic update for UI
+      setIsEditingId(false);
+      alert('মেস আইডি আপডেট করা হয়েছে। এখন থেকে মেম্বাররা এই আইডি ব্যবহার করে জয়েন করতে পারবে।');
+    } catch (error) {
+      console.error("Error updating messId:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -105,16 +156,32 @@ export default function SettingsView({ isManager, messId, userProfile }: { isMan
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">মেস আইডি (Mess ID)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">মেস আইডি (Join ID)</label>
                 <div className="flex items-center gap-2 mt-1">
                   <input 
-                    type="text" value={messId || 'N/A'} disabled
-                    className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl focus:outline-none disabled:opacity-70" 
+                    type="text" value={isEditingId ? editableMessId : editableMessId || messId || 'N/A'} 
+                    onChange={e => setEditableMessId(e.target.value)}
+                    disabled={!isEditingId}
+                    className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-70" 
                   />
-                  <button onClick={() => { if (messId) navigator.clipboard.writeText(messId); }} className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
+                  {isManager && (
+                    isEditingId ? (
+                      <button onClick={handleUpdateMessId} disabled={loading} className="px-4 h-12 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors">
+                        সেভ
+                      </button>
+                    ) : (
+                      <button onClick={() => setIsEditingId(true)} className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition-colors shrink-0">
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                    )
+                  )}
+                  <button onClick={() => { if (editableMessId || messId) navigator.clipboard.writeText(editableMessId || messId || ''); }} className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
                     <Copy className="w-5 h-5" />
                   </button>
                 </div>
+                {isManager && !isEditingId && calculateCooldown() > 0 && (
+                  <p className="text-[9px] font-bold text-rose-500 mt-1">পরবর্তী পরিবর্তন {calculateCooldown()} দিন পর সম্ভব</p>
+                )}
               </div>
 
               <div>
@@ -176,7 +243,10 @@ export default function SettingsView({ isManager, messId, userProfile }: { isMan
 
         {/* LOGOUT */}
         <section className="flex justify-center mb-12">
-           <button className="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-colors flex items-center gap-2">
+           <button 
+             onClick={onLogout}
+             className="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-colors flex items-center gap-2"
+           >
              <LogOut className="w-5 h-5" /> লগআউট করুন
            </button>
         </section>

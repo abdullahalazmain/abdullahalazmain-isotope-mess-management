@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   FileText, Download, ChevronLeft, ChevronRight, 
   PieChart as PieChartIcon, TrendingUp, DollarSign, Utensils
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { listenToFullLedger, MemberLedger } from './services/financialService';
 
 interface MemberSummary {
   id: string;
@@ -17,36 +18,39 @@ interface MemberSummary {
   balance: number;
 }
 
-const mockSummary: MemberSummary[] = [
-  { id: '1', name: 'James Doe', totalDeposit: 5000, totalMeals: 45, mealCost: 2538, otherCost: 1500, totalExpense: 4038, balance: 962 },
-  { id: '2', name: 'Rahim Uddin', totalDeposit: 4000, totalMeals: 40, mealCost: 2256, otherCost: 1500, totalExpense: 3756, balance: 244 },
-  { id: '3', name: 'Karim Hasan', totalDeposit: 3000, totalMeals: 50, mealCost: 2820, otherCost: 1500, totalExpense: 4320, balance: -1320 },
-  { id: '4', name: 'Zayed Khan', totalDeposit: 4500, totalMeals: 35, mealCost: 1974, otherCost: 1500, totalExpense: 3474, balance: 1026 },
-];
+// Mock data removed in favor of real-time Firestore listener
 
-const pieData = [
-  { name: 'বাজার খরচ', value: 9588, color: '#6366f1' },
-  { name: 'বাসা ভাড়া', value: 12000, color: '#f43f5e' },
-  { name: 'ইউটিলিটি', value: 4800, color: '#f59e0b' },
-  { name: 'অন্যান্য', value: 1200, color: '#10b981' }
-];
+export default function SummaryView({ isManager, messId }: { isManager: boolean, messId?: string }) {
+  const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
+  const [ledger, setLedger] = useState<MemberLedger[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-export default function SummaryView({ isManager }: { isManager: boolean }) {
-  const [currentMonth, setCurrentMonth] = useState(new Date('2024-05-01'));
+  const monthStr = currentMonthDate.toISOString().substring(0, 7); // 'YYYY-MM'
+
+  useEffect(() => {
+    if (!messId) return;
+    const unsub = listenToFullLedger(messId, monthStr, (data, stats) => {
+      setLedger(data);
+      setStats(stats);
+      setLoading(false);
+    });
+    return unsub;
+  }, [messId, monthStr]);
 
   const handlePrevMonth = () => {
-    const prev = new Date(currentMonth);
+    const prev = new Date(currentMonthDate);
     prev.setMonth(prev.getMonth() - 1);
-    setCurrentMonth(prev);
+    setCurrentMonthDate(prev);
   };
 
   const handleNextMonth = () => {
-    const next = new Date(currentMonth);
+    const next = new Date(currentMonthDate);
     next.setMonth(next.getMonth() + 1);
-    setCurrentMonth(next);
+    setCurrentMonthDate(next);
   };
 
-  const monthName = currentMonth.toLocaleString('bn-BD', { month: 'long', year: 'numeric' });
+  const monthName = currentMonthDate.toLocaleString('bn-BD', { month: 'long', year: 'numeric' });
 
   return (
     <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
@@ -62,7 +66,10 @@ export default function SummaryView({ isManager }: { isManager: boolean }) {
           </div>
         </div>
         
-        <button className="flex px-6 py-3 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all items-center justify-center gap-2">
+        <button 
+          onClick={() => window.print()}
+          className="flex px-6 py-3 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all items-center justify-center gap-2"
+        >
           <Download className="w-5 h-5" /> এক্সপোর্ট PDF
         </button>
       </div>
@@ -76,25 +83,25 @@ export default function SummaryView({ isManager }: { isManager: boolean }) {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
+        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-center">
            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3"><DollarSign className="w-5 h-5"/></div>
            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">মোট কালেকশন</p>
-           <h3 className="text-2xl font-black text-slate-800">৳ ১৬,৫০০</h3>
+           <h3 className="text-2xl font-black text-slate-800">৳ {stats?.totalCollection?.toLocaleString() || '০'}</h3>
         </div>
         <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center mb-3"><TrendingUp className="w-5 h-5"/></div>
            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">মোট খরচ</p>
-           <h3 className="text-2xl font-black text-slate-800">৳ ২৭,৫৮৮</h3>
+           <h3 className="text-2xl font-black text-slate-800">৳ {stats?.totalExpense?.toLocaleString() || '০'}</h3>
         </div>
         <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
            <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center mb-3"><Utensils className="w-5 h-5"/></div>
            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">মোট মিল সংখ্যা</p>
-           <h3 className="text-2xl font-black text-slate-800">১৭০</h3>
+           <h3 className="text-2xl font-black text-slate-800">{stats?.totalMeals || '০'}</h3>
         </div>
         <div className="bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-xl shadow-emerald-200 rounded-3xl p-5 flex flex-col justify-between">
            <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center mb-3"><PieChartIcon className="w-5 h-5"/></div>
            <p className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mb-1">চূড়ান্ত মিল রেট</p>
-           <h3 className="text-2xl font-black">৳ ৫৬.৪০</h3>
+           <h3 className="text-2xl font-black">৳ {stats?.mealRate || '০'}</h3>
         </div>
       </div>
 
@@ -105,8 +112,8 @@ export default function SummaryView({ isManager }: { isManager: boolean }) {
           <div className="flex-1 w-full min-h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                  {pieData.map((entry, index) => (
+                <Pie data={stats?.pieData || []} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  {(stats?.pieData || []).map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -153,9 +160,9 @@ export default function SummaryView({ isManager }: { isManager: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {mockSummary.map((member) => (
-                <tr key={member.id} className="border-b border-slate-100/50 hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 font-bold text-slate-700 whitespace-nowrap">{member.name}</td>
+              {ledger.map((member) => (
+                <tr key={member.userId} className="border-b border-slate-100/50 hover:bg-slate-50/50 transition-colors">
+                  <td className="p-4 font-bold text-slate-700 whitespace-nowrap">{member.userName}</td>
                   <td className="p-4 text-center font-bold text-emerald-600">৳ {member.totalDeposit}</td>
                   <td className="p-4 text-center font-bold text-slate-500">{member.totalMeals}</td>
                   <td className="p-4 text-center font-bold text-slate-500">৳ {member.mealCost}</td>

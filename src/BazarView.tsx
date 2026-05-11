@@ -33,7 +33,13 @@ const initialRecords: BazarRecord[] = [
   }
 ];
 
-export default function BazarView({ isManager, messId, userId, userName }: { isManager?: boolean, messId?: string, userId?: string, userName?: string }) {
+export default function BazarView({ isManager, messId, userId, userName, messData }: { 
+  isManager?: boolean, 
+  messId?: string, 
+  userId?: string, 
+  userName?: string,
+  messData?: any
+}) {
   const [isMarketDuty, setIsMarketDuty] = useState(true); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -166,16 +172,16 @@ export default function BazarView({ isManager, messId, userId, userName }: { isM
           {!isManager ? (
             <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl p-6 text-white shadow-xl shadow-emerald-200/50 flex justify-between items-center">
               <div>
-                <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-1">আমার মোট বাজার</p>
-                <h3 className="text-3xl font-black">৳ ৪,২০০</h3>
+                <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-1">আমার মোট বাজার (My Total)</p>
+                <h3 className="text-3xl font-black">৳ {records.filter(r => r.userId === userId && r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
               </div>
               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><ShoppingCart className="w-6 h-6" /></div>
             </div>
           ) : (
              <div className="bg-gradient-to-r from-[#1e1b4b] to-indigo-900 rounded-3xl p-6 text-white shadow-xl shadow-indigo-900/30 flex justify-between items-center">
               <div>
-                <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-1">মেসের মোট বাজার (চলতি মাস)</p>
-                <h3 className="text-3xl font-black">৳ ২৫,৪০০</h3>
+                <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-1">মেসের মোট বাজার (Mess Total)</p>
+                <h3 className="text-3xl font-black">৳ {records.filter(r => r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
               </div>
               <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><ShoppingCart className="w-6 h-6" /></div>
             </div>
@@ -188,7 +194,7 @@ export default function BazarView({ isManager, messId, userId, userName }: { isM
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">মেসের মোট বাজার</p>
                    <TrendingUp className="w-4 h-4 text-indigo-500" />
                  </div>
-                 <h3 className="text-xl font-black text-slate-800">৳ ২৫,৪০০</h3>
+                 <h3 className="text-xl font-black text-slate-800">৳ {records.filter(r => r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
                </div>
             ) : (
                <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
@@ -196,7 +202,7 @@ export default function BazarView({ isManager, messId, userId, userName }: { isM
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">পেন্ডিং এপ্রুভাল</p>
                    <AlertCircle className="w-4 h-4 text-orange-500" />
                  </div>
-                 <h3 className="text-xl font-black text-slate-800">২ টি</h3>
+                 <h3 className="text-xl font-black text-slate-800">{records.filter(r => r.status === 'Pending').length} টি</h3>
                </div>
             )}
             
@@ -207,12 +213,23 @@ export default function BazarView({ isManager, messId, userId, userName }: { isM
               </div>
               <div className="flex flex-wrap gap-1">
                 {isManager ? (
-                   <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold border border-emerald-100">James Doe</span>
+                   (() => {
+                     const todayStr = new Date().toISOString().split('T')[0];
+                     const dutyUid = messData?.assignedDuties?.[todayStr];
+                     return <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold border border-emerald-100">{dutyUid ? 'নির্ধারিত' : 'কেউ নেই'}</span>;
+                   })()
                 ) : (
-                   <>
-                     <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold">May 12</span>
-                     <span className="px-2 py-1 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-bold">May 25</span>
-                   </>
+                   (() => {
+                     const myDuties = Object.entries(messData?.assignedDuties || {})
+                       .filter(([date, uid]) => uid === userId && new Date(date) >= new Date())
+                       .map(([date]) => date);
+                     
+                     if (myDuties.length === 0) return <span className="text-[10px] text-slate-400">কোনো ডিউটি নেই</span>;
+                     
+                     return myDuties.slice(0, 2).map(date => (
+                       <span key={date} className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100">{new Date(date).toLocaleDateString('bn-BD', { month: 'short', day: 'numeric' })}</span>
+                     ));
+                   })()
                 )}
               </div>
             </div>
@@ -223,22 +240,30 @@ export default function BazarView({ isManager, messId, userId, userName }: { isM
         <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col relative group">
             <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">বাজেট বনাম খরচ</h3>
-            {isManager && (
-              <button className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100">
-                <Edit3 className="w-4 h-4" />
-              </button>
-            )}
             <div className="flex-1 w-full min-h-[150px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mockBudgetChart} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <BarChart 
+                  data={(() => {
+                    const memberSpending: any = {};
+                    records.filter(r => r.status === 'Approved').forEach(r => {
+                      memberSpending[r.submitterName] = (memberSpending[r.submitterName] || 0) + r.totalAmount;
+                    });
+                    return Object.entries(memberSpending).map(([name, spent]) => ({
+                      name: name.split(' ')[0],
+                      budget: 4000,
+                      spent
+                    }));
+                  })()} 
+                  margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
                   <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="budget" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={20} />
                   <Bar dataKey="spent" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20}>
-                    {mockBudgetChart.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.spent > entry.budget ? '#f43f5e' : '#6366f1'} />
+                    {(records || []).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={(entry.totalAmount || 0) > 4000 ? '#f43f5e' : '#6366f1'} />
                     ))}
                   </Bar>
                 </BarChart>

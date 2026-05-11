@@ -38,6 +38,10 @@ import {
   setDoc, 
   updateDoc,
   getDoc,
+  getDocs,
+  query,
+  collection,
+  where,
   serverTimestamp 
 } from './firebase';
 import { 
@@ -1073,18 +1077,19 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
     e.preventDefault();
     setIsProcessing(true);
     try {
-      const messRef = doc(db, 'messes', messId);
-      const messSnap = await getDoc(messRef);
+      const q = query(collection(db, 'messes'), where('messId', '==', messId));
+      const messSnap = await getDocs(q);
       
-      if (messSnap.exists()) {
-        const messData = messSnap.data();
+      if (!messSnap.empty) {
+        const messDoc = messSnap.docs[0];
+        const messData = messDoc.data();
         if (messData.password === messPassword) {
           // Join mess
           const user = auth.currentUser;
           if (user) {
             const role = messData.creatorUid === user.uid ? 'Manager' : 'Member';
             await updateDoc(doc(db, 'users', user.uid), {
-              messId: messId,
+              messId: messDoc.id, // Use the Internal Doc ID for storage
               role: role,
               joinedAt: serverTimestamp()
             });
@@ -1130,9 +1135,11 @@ const DecisionScreenModal = ({ onClose }: { onClose: () => void }) => {
 
       // 1. Create Mess Document
       await setDoc(doc(db, 'messes', generatedId), {
+        messId: generatedId,
         name: newMessName,
         password: newMessPassword,
         creatorUid: user.uid,
+        managerEmail: user.email,
         createdAt: serverTimestamp(),
         membersCount: 1
       });
