@@ -1,4 +1,4 @@
-import { Timestamp } from './firebase';
+import { Timestamp } from '../firebase';
 
 // ─── User ────────────────────────────────────────────────────────────────────
 export interface UserProfile {

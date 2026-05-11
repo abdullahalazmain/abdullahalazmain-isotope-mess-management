@@ -4,11 +4,11 @@ import {
   Bell, Plus, Trash2, Send, X, Users, AlertCircle, CheckCircle2, User as UserIcon,
   Megaphone, Clock, Eye, EyeOff, ShieldAlert, Check
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot } from './firebase';
+import { db, collection, query, where, onSnapshot } from '../firebase';
 import { 
   listenToNotices, createNotice, deleteNotice, markNoticeAsRead, hideNoticeForUser 
-} from './services/noticeService';
-import { Notice, UserProfile } from './types';
+} from '../services/noticeService';
+import { Notice, UserProfile } from '../types';
 
 export default function NoticeView({ isManager, messId, userId }: { isManager: boolean, messId?: string, userId?: string }) {
   const [notices, setNotices] = useState<Notice[]>([]);

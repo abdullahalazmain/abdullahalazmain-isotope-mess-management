@@ -5,7 +5,7 @@ import {
   Trash2, ShieldAlert, LogOut, Check, ArrowRight, Edit2
 } from 'lucide-react';
 
-import { db, doc, updateDoc, getDoc, collection, query, where, getDocs, serverTimestamp } from './firebase';
+import { db, doc, updateDoc, getDoc, collection, query, where, getDocs, serverTimestamp } from '../firebase';
 
 export default function SettingsView({ isManager, messId, userProfile, onLogout }: { 
   isManager: boolean, 

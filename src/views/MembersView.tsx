@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { db, collection, query, where, onSnapshot, doc, updateDoc } from './firebase';
+import { db, collection, query, where, onSnapshot, doc, updateDoc } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, UserMinus, UserPlus, Shield, X, Phone, Droplet, 
   Calendar, Check, Copy, AlertTriangle, ChevronRight, UserCog, ShoppingCart, ChevronLeft
 } from 'lucide-react';
-import { listenToMemberFinancials, MemberFinancials } from './services/financialService';
+import { listenToMemberFinancials, MemberFinancials } from '../services/financialService';
 
 interface Member {
   id: string;

@@ -5,7 +5,7 @@ import {
   PieChart as PieChartIcon, TrendingUp, DollarSign, Utensils
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
-import { listenToFullLedger, MemberLedger } from './services/financialService';
+import { listenToFullLedger, MemberLedger } from '../services/financialService';
 
 interface MemberSummary {
   id: string;

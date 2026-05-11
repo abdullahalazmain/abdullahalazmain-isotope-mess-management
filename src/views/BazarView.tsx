@@ -5,8 +5,8 @@ import {
   Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar } from './services/bazarService';
-import type { BazarRecord, BazarItem } from './types';
+import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar } from '../services/bazarService';
+import type { BazarRecord, BazarItem } from '../types';
 
 const mockBudgetChart = [
   { name: 'James (You)', budget: 5000, spent: 4200 },

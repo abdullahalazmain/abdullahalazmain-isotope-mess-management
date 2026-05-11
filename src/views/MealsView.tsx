@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db, collection, query, where, onSnapshot } from './firebase';
-import { listenToUserMeals, listenToAllMessMeals, saveMeal } from './services/mealService';
-import type { MealRecord } from './types';
+import { db, collection, query, where, onSnapshot } from '../firebase';
+import { listenToUserMeals, listenToAllMessMeals, saveMeal } from '../services/mealService';
+import type { MealRecord } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Utensils, ShoppingCart, Calculator, Calendar as CalendarIcon, 

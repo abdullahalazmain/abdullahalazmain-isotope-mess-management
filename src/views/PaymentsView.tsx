@@ -4,9 +4,9 @@ import {
   CreditCard, Home, Zap, MoreHorizontal, ChevronDown, Check, X, 
   Plus, Users, Calculator, AlertTriangle, ChevronRight, User as UserIcon, Minus, DollarSign
 } from 'lucide-react';
-import { listenToBills, createBill, markSplitAsPaid } from './services/billService';
-import { recordDeposit, listenToDeposits, Deposit } from './services/depositService';
-import type { Bill, BillCategory, BillSplit } from './types';
+import { listenToBills, createBill, markSplitAsPaid } from '../services/billService';
+import { recordDeposit, listenToDeposits, Deposit } from '../services/depositService';
+import type { Bill, BillCategory, BillSplit } from '../types';
 
 interface MemberBill {
   id: string;
