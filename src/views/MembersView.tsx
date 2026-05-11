@@ -180,9 +180,13 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
   const handleApproveRequest = async (requestId: string, userData: any) => {
     if (!messId) return;
     try {
-      // 1. Update user document with messId and remove pendingMessId
-      const userRef = doc(db, 'users', requestId);
-      await updateDoc(userRef, { messId, role: 'Member', pendingMessId: deleteField() });
+      // 1. Update user document with messId and remove pendingMessId (might fail if user deleted)
+      try {
+        const userRef = doc(db, 'users', requestId);
+        await updateDoc(userRef, { messId, role: 'Member', pendingMessId: deleteField() });
+      } catch (e) {
+        console.warn("Could not update user doc. Proceeding to accept request anyway.", e);
+      }
 
       // 2. Remove from formerMembers if they were there
       const formerRef = doc(db, 'messes', messId, 'formerMembers', requestId);
@@ -202,9 +206,13 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
   const handleRejectRequest = async (requestId: string) => {
     if (!messId) return;
     try {
-      // 1. Remove pendingMessId from user doc
-      const userRef = doc(db, 'users', requestId);
-      await updateDoc(userRef, { pendingMessId: deleteField() });
+      // 1. Remove pendingMessId from user doc (might fail if user deleted)
+      try {
+        const userRef = doc(db, 'users', requestId);
+        await updateDoc(userRef, { pendingMessId: deleteField() });
+      } catch (e) {
+        console.warn("Could not update user doc. Proceeding to delete request anyway.", e);
+      }
 
       // 2. Delete request
       const requestRef = doc(db, 'messes', messId, 'requests', requestId);
