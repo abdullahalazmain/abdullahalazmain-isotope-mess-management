@@ -174,31 +174,48 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
         {/* ACTIVE MEMBERS TAB */}
         {activeTab === 'active' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {members.map(member => (
-              <motion.div 
-                whileHover={{ y: -5 }}
-                key={member.id} 
-                onClick={() => setSelectedMember(member)}
-                className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl shadow-slate-200/50 rounded-3xl p-6 cursor-pointer group hover:bg-white/90 transition-colors"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
-                  {member.role === 'Manager' && (
-                    <span className="px-3 py-1 bg-indigo-100 text-[#6366f1] rounded-full text-[10px] font-bold flex items-center gap-1">
-                      <Shield className="w-3 h-3" /> ম্যানেজার
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-1">{member.name}</h3>
-                <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3"><Phone className="w-3 h-3" /> {member.phone || 'No Phone'}</p>
-                <div className="pt-3 border-t border-slate-100/80 flex justify-between items-center">
-                  <p className="text-[10px] font-bold text-slate-400">যুক্ত হয়েছেন: <br/><span className="text-slate-600">{member.joinDate || 'N/A'}</span></p>
-                  <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-[#6366f1] group-hover:text-white transition-colors">
-                    <ChevronRight className="w-4 h-4" />
+            {members.map(member => {
+              const joinedAt = (member as any).joinedAt?.toDate?.() || (member as any).createdAt?.toDate?.() || (member.joinDate ? new Date(member.joinDate) : null);
+              const formattedTime = joinedAt 
+                ? joinedAt.toLocaleString('bn-BD', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  }) 
+                : member.joinDate || 'N/A';
+
+              return (
+                <motion.div 
+                  whileHover={{ y: -5 }}
+                  key={member.id} 
+                  onClick={() => setSelectedMember(member)}
+                  className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl shadow-slate-200/50 rounded-3xl p-6 cursor-pointer group hover:bg-white/90 transition-colors"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} alt={member.name} className="w-16 h-16 rounded-2xl bg-indigo-50 border-4 border-white shadow-sm group-hover:scale-105 transition-transform" />
+                    {member.role === 'Manager' && (
+                      <span className="px-3 py-1 bg-indigo-100 text-[#6366f1] rounded-full text-[10px] font-bold flex items-center gap-1">
+                        <Shield className="w-3 h-3" /> ম্যানেজার
+                      </span>
+                    )}
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                  <h3 className="text-lg font-black text-slate-800 mb-1">{member.name}</h3>
+                  <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3"><Phone className="w-3 h-3" /> {member.phone || 'No Phone'}</p>
+                  <div className="pt-3 border-t border-slate-100/80 flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400">যুক্ত হয়েছেন:</p>
+                      <p className="text-[10px] font-bold text-slate-600 leading-tight">{formattedTime}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-[#6366f1] group-hover:text-white transition-colors">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
 
             {/* Quick Invite Card */}
             <div className="bg-indigo-50/50 backdrop-blur-md border-2 border-dashed border-indigo-200 rounded-3xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-indigo-50 transition-colors">

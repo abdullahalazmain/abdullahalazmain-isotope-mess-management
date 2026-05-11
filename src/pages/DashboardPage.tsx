@@ -71,6 +71,7 @@ export default function DashboardPage() {
   const [editPhone, setEditPhone] = useState('');
   const [editBloodGroup, setEditBloodGroup] = useState('');
   const [editEmergencyContact, setEditEmergencyContact] = useState('');
+  const [editAddress, setEditAddress] = useState('');
 
   useEffect(() => {
     if (userProfile) {
@@ -78,6 +79,7 @@ export default function DashboardPage() {
       setEditPhone(userProfile.phone || '');
       setEditBloodGroup(userProfile.bloodGroup || '');
       setEditEmergencyContact(userProfile.emergencyContact || '');
+      setEditAddress(userProfile.address || '');
     }
   }, [userProfile]);
 
@@ -88,7 +90,8 @@ export default function DashboardPage() {
         name: editName,
         phone: editPhone,
         bloodGroup: editBloodGroup,
-        emergencyContact: editEmergencyContact
+        emergencyContact: editEmergencyContact,
+        address: editAddress
       });
       setIsEditProfileOpen(false);
     } catch (error) {
@@ -183,6 +186,7 @@ export default function DashboardPage() {
         activeView={activeView} 
         setActiveView={setActiveView} 
         userProfile={userProfile} 
+        onEditProfile={() => setIsEditProfileOpen(true)}
       />
       
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-28' : 'ml-4'} pl-4 pr-10 py-8 h-screen overflow-y-auto no-scrollbar relative`}>
@@ -462,6 +466,127 @@ export default function DashboardPage() {
         </div>
         {isManager ? 'Add Mess Expense' : 'Add Guest Meal'}
       </button>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {isEditProfileOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEditProfileOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white/90 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white overflow-hidden"
+            >
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-800">প্রোফাইল আপডেট</h2>
+                    <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">ব্যক্তিগত তথ্য পরিবর্তন করুন</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsEditProfileOpen(false)}
+                    className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col items-center mb-2">
+                    <div className="relative group">
+                      <img 
+                        src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} 
+                        alt="Profile" 
+                        className="w-24 h-24 rounded-full border-4 border-white shadow-lg bg-indigo-50" 
+                      />
+                      <button className="absolute bottom-0 right-0 w-8 h-8 bg-[#6366f1] text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white group-hover:scale-110 transition-transform">
+                        <Camera size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">পূর্ণ নাম</label>
+                      <input 
+                        type="text" 
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="আপনার নাম"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all shadow-sm"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">মোবাইল নম্বর</label>
+                        <div className="relative">
+                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                          <input 
+                            type="text" 
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            placeholder="01xxx..."
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all shadow-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">রক্তের গ্রুপ</label>
+                        <div className="relative">
+                          <Droplet className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-rose-400" />
+                          <input 
+                            type="text" 
+                            value={editBloodGroup}
+                            onChange={(e) => setEditBloodGroup(e.target.value)}
+                            placeholder="A+"
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all shadow-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">জরুরি যোগাযোগ</label>
+                      <input 
+                        type="text" 
+                        value={editEmergencyContact}
+                        onChange={(e) => setEditEmergencyContact(e.target.value)}
+                        placeholder="নাম - নম্বর"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all shadow-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">ঠিকানা (Address)</label>
+                      <textarea 
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                        placeholder="আপনার বর্তমান ঠিকানা"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all shadow-sm resize-none h-24"
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={handleUpdateProfile}
+                    className="w-full bg-[#1e1b4b] text-white py-4 rounded-2xl font-bold shadow-xl shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all mt-4 flex items-center justify-center gap-2"
+                  >
+                    তথ্য আপডেট করুন
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

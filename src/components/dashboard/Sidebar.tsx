@@ -13,7 +13,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile }: { isOpen: boolean, onToggle: () => void, activeView: string, setActiveView: (v: string) => void, userProfile: any }) => {
+const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile, onEditProfile }: { 
+  isOpen: boolean, 
+  onToggle: () => void, 
+  activeView: string, 
+  setActiveView: (v: string) => void, 
+  userProfile: any,
+  onEditProfile?: () => void
+}) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const icons = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, title: "ড্যাশবোর্ড (Dashboard)", active: activeView === 'dashboard' },
@@ -94,7 +101,7 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile }: {
               exit={{ opacity: 0, x: -10 }}
               className="absolute left-[90px] bottom-10 w-64 bg-white/90 backdrop-blur-xl rounded-2xl p-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.3)] border border-white flex flex-col pointer-events-auto z-50"
             >
-              <div className="flex items-center gap-3 mb-4 p-2 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3 mb-2 p-2 border-b border-slate-100 pb-4">
                 <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-indigo-100 bg-indigo-50" />
                 <div>
                   <h4 className="text-slate-800 font-bold text-sm">{userProfile?.name || 'গুগল ইউজার'}</h4>
@@ -110,6 +117,16 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile }: {
                   </div>
                 </div>
               </div>
+              <button 
+                onClick={() => {
+                  if (onEditProfile) onEditProfile();
+                  setIsProfileOpen(false);
+                }} 
+                className="flex items-center gap-3 w-full p-3 hover:bg-indigo-50 rounded-xl text-left font-semibold text-slate-700 transition-colors"
+              >
+                <Settings size={16} className="text-[#6366f1]" />
+                <span className="text-sm">প্রোফাইল সম্পাদন</span>
+              </button>
               <button onClick={() => window.location.href = '/'} className="flex items-center gap-3 w-full p-3 hover:bg-red-50 rounded-xl text-left font-semibold text-red-500 transition-colors mt-1">
                 <LogOut className="w-4 h-4" />
                 <span className="text-sm">লগআউট</span>
