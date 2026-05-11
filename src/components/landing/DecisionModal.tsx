@@ -168,12 +168,6 @@ const DecisionModal = ({ onClose, userProfile }: { onClose: () => void, userProf
           <p className="text-[#64748b] font-medium text-lg max-w-md mx-auto mb-8 leading-relaxed">
             আপনার জয়েনিং রিকোয়েস্ট ম্যানেজারের কাছে পাঠানো হয়েছে। ম্যানেজার অনুমোদন করলে আপনি মেসে প্রবেশ করতে পারবেন।
           </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-8 py-4 bg-amber-500 text-white font-bold rounded-2xl shadow-lg shadow-amber-200 hover:shadow-xl hover:-translate-y-1 transition-all"
-          >
-            স্ট্যাটাস চেক করুন
-          </button>
         </motion.div>
       ) : view === 'decision' ? (
         <>
