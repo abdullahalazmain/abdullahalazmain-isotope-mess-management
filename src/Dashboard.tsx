@@ -317,7 +317,7 @@ export default function Dashboard() {
           <PaymentsView isManager={isManager} />
         ) : activeView === 'summary' ? (
           <SummaryView isManager={isManager} />
-        ) : activeView === 'notices' ? (
+        ) : activeView === 'notice' ? (
           <NoticeView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} />
         ) : activeView === 'settings' ? (
           <SettingsView isManager={isManager} messId={userProfile?.messId} userProfile={userProfile} />
