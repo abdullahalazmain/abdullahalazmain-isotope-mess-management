@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, collection, query, where, onSnapshot, doc, updateDoc } from '../firebase';
+import { db, collection, query, where, onSnapshot, doc, updateDoc, setDoc, deleteDoc, serverTimestamp } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, UserMinus, UserPlus, Shield, X, Phone, Droplet, 
@@ -53,9 +53,11 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
   const [activeTab, setActiveTab] = useState<'active' | 'former' | 'pending'>('active');
   const [members, setMembers] = useState<Member[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [formerMembers, setFormerMembers] = useState<any[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showManagerControls, setShowManagerControls] = useState(false);
   const [showTransferConfirm, setShowTransferConfirm] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [selectedMemberStats, setSelectedMemberStats] = useState<MemberFinancials | null>(null);
 
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -94,9 +96,25 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
       setPendingRequests(requestsList);
     });
 
+    // 3. Listen to former members
+    const formerQuery = query(collection(db, 'messes', messId, 'formerMembers'));
+    const unsubscribeFormer = onSnapshot(formerQuery, (snapshot) => {
+      const formerList = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const leftAt = data.leftAt?.toDate?.() || null;
+        return {
+          id: doc.id,
+          ...data,
+          leftDate: leftAt ? leftAt.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'
+        };
+      });
+      setFormerMembers(formerList);
+    });
+
     return () => {
       unsubscribeMembers();
       unsubscribeRequests();
+      unsubscribeFormer();
     };
   }, [messId]);
 
@@ -112,15 +130,65 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
     }
   };
 
+  const handleRemoveMember = async (memberId: string) => {
+    if (!messId) return;
+    try {
+      const member = members.find(m => m.id === memberId);
+      if (member) {
+        // 1. Add to formerMembers subcollection
+        const formerRef = doc(db, 'messes', messId, 'formerMembers', memberId);
+        await setDoc(formerRef, {
+          id: member.id,
+          name: member.name || 'Unknown',
+          phone: member.phone || null,
+          avatarSeed: member.avatarSeed || null,
+          leftAt: serverTimestamp(),
+          dueAtLeave: selectedMemberStats?.dueAmount || 0
+        });
+      }
+
+      // 2. Remove messId from user doc
+      const userRef = doc(db, 'users', memberId);
+      await updateDoc(userRef, { messId: null, role: 'Member' });
+      handleCloseModal();
+    } catch (error) {
+      console.error("Error removing member:", error);
+    }
+  };
+
+  const handleTransferOwnership = async (memberId: string) => {
+    if (!messId) return;
+    try {
+      // In a real app, this might be a request system. 
+      // For now, we'll directly update the owner field in the mess document.
+      const messRef = doc(db, 'messes', messId);
+      await updateDoc(messRef, { ownerId: memberId });
+      
+      // Ensure the new owner is a Manager
+      const newOwnerRef = doc(db, 'users', memberId);
+      await updateDoc(newOwnerRef, { role: 'Manager' });
+      
+      handleCloseModal();
+      alert("Ownership transferred successfully!");
+    } catch (error) {
+      console.error("Error transferring ownership:", error);
+    }
+  };
+
   const handleApproveRequest = async (requestId: string, userData: any) => {
     if (!messId) return;
     try {
       // 1. Update user document with messId
       const userRef = doc(db, 'users', requestId);
       await updateDoc(userRef, { messId, role: 'Member' });
-      // 2. Delete request
+
+      // 2. Remove from formerMembers if they were there
+      const formerRef = doc(db, 'messes', messId, 'formerMembers', requestId);
+      await deleteDoc(formerRef);
+
+      // 3. Delete request
       const requestRef = doc(db, 'messes', messId, 'requests', requestId);
-      await updateDoc(requestRef, { status: 'Approved' }); // Or delete
+      await deleteDoc(requestRef); 
     } catch (err) { console.error(err); }
   };
 
@@ -128,6 +196,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
     setSelectedMember(null);
     setShowManagerControls(false);
     setShowTransferConfirm(false);
+    setShowRemoveConfirm(false);
   };
 
   return (
@@ -243,16 +312,22 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                 </tr>
               </thead>
               <tbody>
-                {mockFormerMembers.map(member => (
-                  <tr key={member.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 px-4 flex items-center gap-3">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed}`} className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm" />
-                      <span className="font-bold text-slate-700">{member.name}</span>
-                    </td>
-                    <td className="py-4 px-4 text-sm font-semibold text-slate-500">{member.leftDate}</td>
-                    <td className="py-4 px-4 text-sm font-bold text-emerald-500">৳ {member.dueAtLeave}</td>
+                {formerMembers.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="py-10 text-center text-slate-500 font-semibold italic">কোন পুরানো সদস্য নেই</td>
                   </tr>
-                ))}
+                ) : (
+                  formerMembers.map(member => (
+                    <tr key={member.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 px-4 flex items-center gap-3">
+                        <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm" />
+                        <span className="font-bold text-slate-700">{member.name}</span>
+                      </td>
+                      <td className="py-4 px-4 text-sm font-semibold text-slate-500">{member.leftDate}</td>
+                      <td className="py-4 px-4 text-sm font-bold text-emerald-500">৳ {member.dueAtLeave}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -425,7 +500,24 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                             <p className="text-sm font-bold text-slate-800">Remove Member</p>
                             <p className="text-[10px] text-slate-500 font-medium">Move to former members list</p>
                           </div>
-                          <button className="px-4 py-2 bg-white border border-rose-200 text-rose-500 rounded-xl text-xs font-bold hover:bg-rose-50 transition-colors shadow-sm">Remove</button>
+                          {!showRemoveConfirm ? (
+                            <button 
+                              onClick={() => setShowRemoveConfirm(true)}
+                              className="px-4 py-2 bg-white border border-rose-200 text-rose-500 rounded-xl text-xs font-bold hover:bg-rose-50 transition-colors shadow-sm"
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <div className="flex gap-2">
+                              <button onClick={() => setShowRemoveConfirm(false)} className="px-3 py-1 bg-white text-slate-600 rounded-lg text-[10px] font-bold border border-slate-200 shadow-sm">Cancel</button>
+                              <button 
+                                onClick={() => handleRemoveMember(selectedMember.id)}
+                                className="px-3 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-bold shadow-md shadow-rose-200"
+                              >
+                                Confirm
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {!showTransferConfirm ? (
@@ -442,12 +534,17 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                               <AlertTriangle className="w-5 h-5 shrink-0" />
                               <div>
                                 <p className="text-sm font-bold">Are you absolutely sure?</p>
-                                <p className="text-xs mt-1 font-medium opacity-80">This will send an ownership request to {selectedMember.name}. If they accept, you will lose primary manager rights.</p>
+                                <p className="text-xs mt-1 font-medium opacity-80">This will transfer primary ownership to {selectedMember.name}. You will no longer be the primary owner.</p>
                               </div>
                             </div>
                             <div className="flex gap-2 justify-end">
                               <button onClick={() => setShowTransferConfirm(false)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-xs font-bold shadow-sm">Cancel</button>
-                              <button className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-200">Send Transfer Request</button>
+                              <button 
+                                onClick={() => handleTransferOwnership(selectedMember.id)}
+                                className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-200"
+                              >
+                                Confirm Transfer
+                              </button>
                             </div>
                           </div>
                         )}
