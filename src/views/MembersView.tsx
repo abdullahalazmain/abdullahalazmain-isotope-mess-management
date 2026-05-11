@@ -6,6 +6,7 @@ import {
   Calendar, Check, Copy, AlertTriangle, ChevronRight, UserCog, ShoppingCart, ChevronLeft
 } from 'lucide-react';
 import { listenToMemberFinancials, MemberFinancials } from '../services/financialService';
+import { toBengaliDigits } from '../utils';
 
 interface Member {
   id: string;
@@ -218,20 +219,23 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
             onClick={() => setActiveTab('active')}
             className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'active' ? 'bg-[#6366f1] text-white shadow-md' : 'text-slate-500 hover:bg-white/80'}`}
           >
-            <Users className="w-4 h-4" /> বর্তমান সদস্য
+            <Users className="w-4 h-4" /> বর্তমান সদস্য 
+            {members.length > 0 && <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${activeTab === 'active' ? 'bg-white text-[#6366f1]' : 'bg-slate-200 text-slate-500'}`}>{toBengaliDigits(members.length)}</span>}
           </button>
           <button 
             onClick={() => setActiveTab('former')}
             className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'former' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-500 hover:bg-white/80'}`}
           >
             <UserMinus className="w-4 h-4" /> পুরানো সদস্য
+            {formerMembers.length > 0 && <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${activeTab === 'former' ? 'bg-white text-slate-700' : 'bg-slate-200 text-slate-500'}`}>{toBengaliDigits(formerMembers.length)}</span>}
           </button>
           {isManager && (
             <button 
               onClick={() => setActiveTab('pending')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'pending' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:bg-white/80'}`}
             >
-              <UserPlus className="w-4 h-4" /> রিকোয়েস্ট <span className="w-5 h-5 bg-white text-emerald-600 rounded-full flex items-center justify-center text-[10px]">১</span>
+              <UserPlus className="w-4 h-4" /> রিকোয়েস্ট 
+              {pendingRequests.length > 0 && <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${activeTab === 'pending' ? 'bg-white text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>{toBengaliDigits(pendingRequests.length)}</span>}
             </button>
           )}
         </div>
