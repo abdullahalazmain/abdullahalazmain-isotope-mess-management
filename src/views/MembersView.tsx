@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, collection, query, where, onSnapshot, doc, updateDoc, setDoc, deleteDoc, serverTimestamp } from '../firebase';
+import { deleteField } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, UserMinus, UserPlus, Shield, X, Phone, Droplet, 
@@ -179,9 +180,9 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
   const handleApproveRequest = async (requestId: string, userData: any) => {
     if (!messId) return;
     try {
-      // 1. Update user document with messId
+      // 1. Update user document with messId and remove pendingMessId
       const userRef = doc(db, 'users', requestId);
-      await updateDoc(userRef, { messId, role: 'Member' });
+      await updateDoc(userRef, { messId, role: 'Member', pendingMessId: deleteField() });
 
       // 2. Remove from formerMembers if they were there
       const formerRef = doc(db, 'messes', messId, 'formerMembers', requestId);
@@ -190,7 +191,30 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
       // 3. Delete request
       const requestRef = doc(db, 'messes', messId, 'requests', requestId);
       await deleteDoc(requestRef); 
-    } catch (err) { console.error(err); }
+      
+      alert("সদস্য যুক্ত করা হয়েছে!");
+    } catch (err: any) { 
+      console.error(err); 
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!messId) return;
+    try {
+      // 1. Remove pendingMessId from user doc
+      const userRef = doc(db, 'users', requestId);
+      await updateDoc(userRef, { pendingMessId: deleteField() });
+
+      // 2. Delete request
+      const requestRef = doc(db, 'messes', messId, 'requests', requestId);
+      await deleteDoc(requestRef); 
+      
+      alert("রিকোয়েস্ট বাতিল করা হয়েছে!");
+    } catch (err: any) { 
+      console.error(err); 
+      alert("Error: " + err.message);
+    }
   };
 
   const handleCloseModal = () => {
@@ -354,7 +378,12 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors">বাতিল করুন</button>
+                    <button 
+                      onClick={() => handleRejectRequest(req.id)}
+                      className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors"
+                    >
+                      বাতিল করুন
+                    </button>
                     <button 
                       onClick={() => handleApproveRequest(req.id, req)}
                       className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors flex items-center gap-1"

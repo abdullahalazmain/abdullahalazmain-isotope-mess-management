@@ -14,7 +14,7 @@ import {
   serverTimestamp 
 } from '../../firebase';
 
-const DecisionModal = ({ onClose }: { onClose: () => void }) => {
+const DecisionModal = ({ onClose, userProfile }: { onClose: () => void, userProfile?: any }) => {
   const [view, setView] = useState<'decision' | 'join' | 'create'>('decision');
   const [messId, setMessId] = useState('');
   const [messPassword, setMessPassword] = useState('');
@@ -35,16 +35,39 @@ const DecisionModal = ({ onClose }: { onClose: () => void }) => {
         const messDoc = messSnap.docs[0];
         const messData = messDoc.data();
         if (messData.password === messPassword) {
-          // Join mess
           const user = auth.currentUser;
           if (user) {
-            const role = messData.creatorUid === user.uid ? 'Manager' : 'Member';
-            await updateDoc(doc(db, 'users', user.uid), {
-              messId: messDoc.id, // Use the Internal Doc ID for storage
-              role: role,
-              joinedAt: serverTimestamp()
-            });
-            window.location.href = '/dashboard.html';
+            const isManager = messData.creatorUid === user.uid;
+            
+            if (isManager) {
+              // Direct join for creator
+              await updateDoc(doc(db, 'users', user.uid), {
+                messId: messDoc.id,
+                role: 'Manager',
+                joinedAt: serverTimestamp()
+              });
+              window.location.href = '/dashboard.html';
+            } else {
+              // 1. Create a request document
+              const requestRef = doc(db, 'messes', messDoc.id, 'requests', user.uid);
+              await setDoc(requestRef, {
+                uid: user.uid,
+                name: userProfile?.name || user.displayName || 'Unknown',
+                email: user.email,
+                phone: userProfile?.phone || '',
+                avatarSeed: userProfile?.avatarSeed || user.email,
+                requestDate: new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })
+              });
+
+              // 2. Mark user with pendingMessId
+              await updateDoc(doc(db, 'users', user.uid), {
+                pendingMessId: messDoc.id
+              });
+
+              alert("আপনার রিকোয়েস্ট পাঠানো হয়েছে। মেসে যুক্ত হতে ম্যানেজারের সাথে যোগাযোগ করুন।");
+              // Wait for auth to trigger reload, or manually close/refresh
+              window.location.reload();
+            }
           }
         } else {
           alert("ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন।");
@@ -132,7 +155,27 @@ const DecisionModal = ({ onClose }: { onClose: () => void }) => {
       <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
-      {view === 'decision' ? (
+      {userProfile?.pendingMessId ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative z-10 text-center py-8"
+        >
+          <div className="w-24 h-24 mx-auto bg-amber-50 rounded-full flex items-center justify-center mb-6 shadow-inner border-2 border-amber-100">
+            <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <h2 className="text-3xl md:text-4xl font-black text-[#1e293b] mb-4">অপেক্ষায় আছে...</h2>
+          <p className="text-[#64748b] font-medium text-lg max-w-md mx-auto mb-8 leading-relaxed">
+            আপনার জয়েনিং রিকোয়েস্ট ম্যানেজারের কাছে পাঠানো হয়েছে। ম্যানেজার অনুমোদন করলে আপনি মেসে প্রবেশ করতে পারবেন।
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-8 py-4 bg-amber-500 text-white font-bold rounded-2xl shadow-lg shadow-amber-200 hover:shadow-xl hover:-translate-y-1 transition-all"
+          >
+            স্ট্যাটাস চেক করুন
+          </button>
+        </motion.div>
+      ) : view === 'decision' ? (
         <>
           <div className="relative z-10 text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-black text-[#1e293b] mb-3">ড্যাশবোর্ড ডিরেক্টরি</h2>

@@ -89,7 +89,7 @@ export default function LandingPage() {
         {activeModal && (
           <ModalOverlay onClose={() => setActiveModal(null)}>
             {activeModal === 'decision' ? (
-              <DecisionModal onClose={() => setActiveModal(null)} />
+              <DecisionModal userProfile={userProfile} onClose={() => setActiveModal(null)} />
             ) : (
               <AuthModal
                 type={activeModal}
