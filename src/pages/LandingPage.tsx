@@ -5,6 +5,7 @@ import {
   db, 
   doc, 
   getDoc,
+  onSnapshot
 } from '../firebase';
 import { 
   onAuthStateChanged, 
@@ -32,27 +33,39 @@ export default function LandingPage() {
   const [activeModal, setActiveModal] = useState<'login' | 'register' | 'decision' | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubscribeSnapshot: any = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setIsLoggedIn(true);
-        // Fetch fresh profile from Firestore
+        // Listen to fresh profile from Firestore
         const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          setUserProfile(data);
-          localStorage.setItem('userProfile', JSON.stringify(data));
-          localStorage.setItem('userRole', data.role);
-        }
+        unsubscribeSnapshot = onSnapshot(userRef, (userSnap) => {
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            setUserProfile(data);
+            localStorage.setItem('userProfile', JSON.stringify(data));
+            localStorage.setItem('userRole', data.role);
+            
+            // If the user is on the DecisionModal and gets accepted
+            if (data.messId && activeModal === 'decision') {
+              window.location.href = '/dashboard.html';
+            }
+          }
+        });
       } else {
         setIsLoggedIn(false);
         setUserProfile(null);
         localStorage.removeItem('userProfile');
         localStorage.removeItem('userRole');
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
       }
     });
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
+  }, [activeModal]);
 
   const handleLoginSuccess = (role: 'Manager' | 'Member', profile?: any) => {
     if (profile) {
