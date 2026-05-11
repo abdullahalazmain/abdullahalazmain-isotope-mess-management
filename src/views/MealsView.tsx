@@ -83,6 +83,9 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
 
   const yearNum = parseInt(currentMonth.split('-')[0]);
   const monthNum = parseInt(currentMonth.split('-')[1]);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(yearNum);
+  const bengaliMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const today = new Date().getDate();
@@ -346,24 +349,51 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
               <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
                 <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-[#6366f1] transition-all"><ChevronLeft className="w-5 h-5" /></button>
                 <div className="relative flex items-center justify-center min-w-[120px]">
-                  <input 
-                    type="month" 
-                    value={currentMonth} 
-                    onClick={(e) => {
-                      try {
-                        e.currentTarget.showPicker();
-                      } catch (err) {}
-                    }}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setCurrentMonth(e.target.value);
-                        setSelectedDays([]);
-                        setMultiSelectMode(false);
-                      }
-                    }} 
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                  />
-                  <span className="font-black text-slate-700 text-sm whitespace-nowrap pointer-events-none">{formatMonthYear(currentMonth)}</span>
+                  <button 
+                    onClick={() => { setPickerYear(yearNum); setIsMonthPickerOpen(!isMonthPickerOpen); }}
+                    className="font-black text-slate-700 text-sm whitespace-nowrap hover:text-[#6366f1] transition-colors px-2 py-1 rounded-lg"
+                  >
+                    {formatMonthYear(currentMonth)}
+                  </button>
+
+                  <AnimatePresence>
+                    {isMonthPickerOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                        className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-slate-100 p-4 z-50 w-[280px]"
+                      >
+                        <div className="flex justify-between items-center mb-4">
+                          <button onClick={() => setPickerYear(pickerYear - 1)} className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-[#6366f1] transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+                          <input 
+                            type="number" 
+                            value={pickerYear} 
+                            onChange={(e) => setPickerYear(parseInt(e.target.value) || new Date().getFullYear())}
+                            className="w-20 text-center font-black text-slate-800 bg-transparent focus:outline-none"
+                          />
+                          <button onClick={() => setPickerYear(pickerYear + 1)} className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-[#6366f1] transition-colors"><ChevronRight className="w-4 h-4" /></button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {bengaliMonths.map((m, i) => {
+                            const isSelected = pickerYear === yearNum && (i + 1) === monthNum;
+                            return (
+                              <button 
+                                key={m} 
+                                onClick={() => {
+                                  setCurrentMonth(`${pickerYear}-${(i + 1).toString().padStart(2, '0')}`);
+                                  setIsMonthPickerOpen(false);
+                                  setSelectedDays([]);
+                                  setMultiSelectMode(false);
+                                }}
+                                className={`py-2 rounded-xl text-[10px] font-bold transition-all ${isSelected ? 'bg-[#6366f1] text-white shadow-md shadow-indigo-200' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-[#6366f1]'}`}
+                              >
+                                {m}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-[#6366f1] transition-all"><ChevronRight className="w-5 h-5" /></button>
               </div>
