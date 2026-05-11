@@ -66,7 +66,7 @@ const LandingNavbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick,
             </button>
             <div className="relative">
               <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full border-2 border-brand-primary/30 p-0.5 hover:scale-105 transition-transform overflow-hidden cursor-pointer shadow-soft">
-                <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-full h-full object-cover bg-brand-primary/10 rounded-full" />
+                <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=GoogleUser"} alt="Profile" className="w-full h-full object-cover bg-brand-primary/10 rounded-full" />
               </button>
 
               <AnimatePresence>
@@ -78,7 +78,7 @@ const LandingNavbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick,
                     className="absolute right-0 mt-4 w-64 glass bg-white/90 rounded-2xl p-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.2)] border border-white flex flex-col z-50"
                   >
                     <div className="flex items-center gap-3 mb-4 p-2 border-b border-slate-100 pb-4">
-                      <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
+                      <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
                       <div>
                         <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
                         <div className="flex items-center gap-1.5">
@@ -143,7 +143,7 @@ const LandingNavbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick,
               {isLoggedIn ? (
                 <div className="w-full flex flex-col gap-2">
                   <div className="flex items-center gap-3 mb-4 p-4 border-2 border-brand-primary/10 rounded-2xl bg-white/50">
-                    <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
+                    <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=GoogleUser"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-brand-primary/20 bg-brand-primary/10" />
                     <div>
                       <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
                       <div className="flex items-center gap-2">

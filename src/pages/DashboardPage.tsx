@@ -502,7 +502,7 @@ export default function DashboardPage() {
                   <div className="flex flex-col items-center mb-2">
                     <div className="relative group">
                       <img 
-                        src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} 
+                        src={userProfile?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=James"} 
                         alt="Profile" 
                         className="w-24 h-24 rounded-full border-4 border-white shadow-lg bg-indigo-50" 
                       />

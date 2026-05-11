@@ -82,7 +82,7 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile, onE
           </div>
 
           <div className="mt-auto pt-6 shrink-0 cursor-pointer relative z-10 group" onClick={() => setIsProfileOpen(!isProfileOpen)}>
-            <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white/50 hover:scale-105 transition-transform" />
+            <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=James"} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white/50 hover:scale-105 transition-transform" />
             
             {!isProfileOpen && (
               <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all pointer-events-none whitespace-nowrap z-50">
@@ -102,7 +102,7 @@ const Sidebar = ({ isOpen, onToggle, activeView, setActiveView, userProfile, onE
               className="absolute left-[90px] bottom-10 w-64 bg-white/90 backdrop-blur-xl rounded-2xl p-4 shadow-[0_20px_50px_-15px_rgba(81,68,177,0.3)] border border-white flex flex-col pointer-events-auto z-50"
             >
               <div className="flex items-center gap-3 mb-2 p-2 border-b border-slate-100 pb-4">
-                <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=James"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-indigo-100 bg-indigo-50" />
+                <img src={userProfile?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=James"} alt="Profile" className="w-12 h-12 rounded-full border-2 border-indigo-100 bg-indigo-50" />
                 <div>
                   <h4 className="text-slate-800 font-bold text-sm">{userProfile?.name || 'গুগল ইউজার'}</h4>
                   <div className="flex flex-col">

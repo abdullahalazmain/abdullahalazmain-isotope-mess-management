@@ -96,7 +96,7 @@ const Testimonials = () => {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-primary to-brand-secondary p-[2px]">
                     <div className="w-full h-full bg-white rounded-[calc(1rem)] flex items-center justify-center overflow-hidden">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${t.name}${i}`} alt={t.name} className="w-full h-full object-cover" />
+                      <img src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${t.name}${i}`} alt={t.name} className="w-full h-full object-cover" />
                     </div>
                   </div>
                   <div>

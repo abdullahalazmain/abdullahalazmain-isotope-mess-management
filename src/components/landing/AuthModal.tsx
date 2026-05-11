@@ -89,7 +89,7 @@ const AuthModal = ({
       const profile = {
         name: user.displayName || email.split('@')[0],
         email: user.email || '',
-        photoURL: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
+        photoURL: user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${email}`
       };
 
       if (email === 'abdullahalazmain1@gmail.com') {
@@ -123,7 +123,7 @@ const AuthModal = ({
         uid: user.uid,
         name: user.displayName || 'গুগল ইউজার',
         email: user.email || '',
-        photoURL: user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleUser',
+        photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=GoogleUser',
         lastLogin: serverTimestamp()
       };
       

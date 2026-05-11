@@ -258,7 +258,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
 
               const profilePic = member.avatarSeed?.startsWith('http') 
                 ? member.avatarSeed 
-                : (member as any).photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`;
+                : (member as any).photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${member.avatarSeed || member.name}`;
 
               return (
                 <motion.div 
@@ -320,7 +320,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
                   formerMembers.map(member => (
                     <tr key={member.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 px-4 flex items-center gap-3">
-                        <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.avatarSeed || member.name}`} className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm" />
+                        <img src={member.avatarSeed?.startsWith('http') ? member.avatarSeed : `https://api.dicebear.com/7.x/adventurer/svg?seed=${member.avatarSeed || member.name}`} className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm" />
                         <span className="font-bold text-slate-700">{member.name}</span>
                       </td>
                       <td className="py-4 px-4 text-sm font-semibold text-slate-500">{member.leftDate}</td>
@@ -342,7 +342,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
               pendingRequests.map(req => (
                 <div key={req.id} className="bg-white/80 backdrop-blur-md border border-emerald-100 shadow-lg rounded-3xl p-5 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <img src={req.avatarSeed?.startsWith('http') ? req.avatarSeed : `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.avatarSeed || req.name}`} className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-white shadow-sm" />
+                    <img src={req.avatarSeed?.startsWith('http') ? req.avatarSeed : `https://api.dicebear.com/7.x/adventurer/svg?seed=${req.avatarSeed || req.name}`} className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-white shadow-sm" />
                     <div>
                       <h3 className="font-bold text-slate-800">{req.name}</h3>
                       <p className="text-xs font-semibold text-slate-500">{req.phone || 'No Phone'}</p>
@@ -382,7 +382,7 @@ export default function MembersView({ isManager, messId }: { isManager: boolean,
           
           const profilePic = selectedMember.avatarSeed?.startsWith('http') 
             ? selectedMember.avatarSeed 
-            : (selectedMember as any).photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedMember.avatarSeed || selectedMember.name}`;
+            : (selectedMember as any).photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${selectedMember.avatarSeed || selectedMember.name}`;
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
