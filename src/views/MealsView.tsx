@@ -5,27 +5,42 @@ import type { MealRecord, BazarRecord } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Utensils, ShoppingCart, Calculator, Calendar as CalendarIcon,
-  Plus, Check, X, AlertTriangle, Clock, Edit2, Minus, BellRing, MousePointer2, ChevronRight, ChevronLeft, Star, User
+  Plus, Check, X, AlertTriangle, Clock, Edit2, Minus, BellRing, MousePointer2, ChevronRight, ChevronLeft, Star, User, Wallet
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-export default function MealsView({ isManager, messId, userId, userName, messData, members = [] }: { isManager?: boolean, messId?: string, userId?: string, userName?: string, messData?: any, members?: any[] }) {
+export default function MealsView({ 
+  isManager, messId, userId, userName, messData, members = [], financials, messFinancials, fullLedger = [], fullMessStats 
+}: { 
+  isManager?: boolean, messId?: string, userId?: string, userName?: string, messData?: any, members?: any[], financials?: any, messFinancials?: any, fullLedger?: any[], fullMessStats?: any 
+}) {
   const [userMeals, setUserMeals] = useState<MealRecord[]>([]);
   const [allMessMeals, setAllMessMeals] = useState<MealRecord[]>([]);
 
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [dragStartDay, setDragStartDay] = useState<number | null>(null);
+  const longPressTimer = React.useRef<any>(null);
   const [bazarRecords, setBazarRecords] = useState<BazarRecord[]>([]);
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
+  const [managerViewType, setManagerViewType] = useState<'own' | 'mess'>('own');
+
+  const viewType = isManager ? managerViewType : 'own';
 
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().substring(0, 7)); // 'YYYY-MM'
   const todayStr = new Date().toISOString().split('T')[0];
 
   const assignedDuties = messData?.assignedDuties || {};
   const specialDays = messData?.specialDays || {};
-  const isMarketDuty = assignedDuties[todayStr] === userName;
+  const isMarketDuty = assignedDuties[todayStr] === userId || assignedDuties[todayStr] === userName;
   const bazarTimers = messData?.bazarTimers || {};
+
+  // Helper to find member reliably by UID or Name
+  const getMemberData = (idOrName: string) => {
+    if (!idOrName) return null;
+    return members.find(m => m.uid === idOrName) || members.find(m => m.name === idOrName);
+  };
 
   useEffect(() => {
     if (!messId || !userId) return;
@@ -106,8 +121,9 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
   const bengaliMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const today = new Date().getDate();
-  const realNow = new Date();
+  const todayDate = new Date();
+  const today = todayDate.getDate();
+  const realNow = todayDate;
   const isCurrentMonth = currentMonth === realNow.toISOString().substring(0, 7);
   
   const monthDiff = (realNow.getFullYear() - yearNum) * 12 + ((realNow.getMonth() + 1) - monthNum);
@@ -160,13 +176,15 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
   };
 
   const handleClearMonth = async () => {
-    if (!messId || !window.confirm(`${formatMonthYear(currentMonth)} এর হিসাব ক্লিয়ার করতে চান? এটি আর এডিট করা যাবে না।`)) return;
+    if (!messId) return;
     try {
       const messRef = doc(db, 'messes', messId);
       const newCleared = [...clearedMonths, currentMonth];
       await updateDoc(messRef, { clearedMonths: newCleared });
+      alert(`${formatMonthYear(currentMonth)} এর হিসাব সফলভাবে ক্লিয়ার করা হয়েছে।`);
     } catch (error) {
       console.error('Error clearing month:', error);
+      alert('হিসাব ক্লিয়ার করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     }
   };
 
@@ -199,47 +217,22 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
   };
 
   const handleDayClick = (day: number) => {
-    const dateStr = `${currentMonth}-${day.toString().padStart(2, '0')}`;
-    const isBazarAssignedToMe = assignedDuties[dateStr] === userName;
-
+    // If month is completely locked, no one can interact
     if (isMonthLocked) {
-      alert('এই মাসের হিসাব ক্লিয়ার হয়ে গেছে বা অনেক পুরনো। আর এডিট করা সম্ভব নয়।');
-      return;
-    }
-
-    if (isManager) {
-      if (monthDiff === 0 || monthDiff === 1) {
-        setManagerActionDay(day);
-      } else {
-        alert('ম্যানেজার হিসেবে আপনি শুধুমাত্র চলতি এবং গত মাসের মিল ম্যানেজ করতে পারবেন।');
-      }
-      return;
-    }
-
-    if (isBazarAssignedToMe && monthDiff === 0) {
       setManagerActionDay(day);
       return;
     }
 
-    if (monthDiff !== 0) {
-      alert('আপনি শুধু চলতি মাসের মিল এডিট করতে পারবেন।');
-      return;
-    }
-
-    const isPastDay = day < today && monthDiff === 0;
-    if (isPastDay && !multiSelectMode) {
-      alert('অতীতের মিল এডিট করার সময় শেষ।');
-      return;
-    }
-
     if (multiSelectMode) {
-      if (isPastDay) return;
+      const isPastDay = day < today && monthDiff === 0;
+      if (isPastDay && !isManager) return;
+      if (monthDiff !== 0 && !isManager) return;
       toggleDaySelection(day);
-    } else {
-      setEditingDays([day]);
-      resetMealState([day]);
-      setIsModalOpen(true);
+      return;
     }
+
+    // Always open the Day Overview Modal for everyone!
+    setManagerActionDay(day);
   };
 
   const toggleDaySelection = (day: number) => {
@@ -251,20 +244,75 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
   };
 
   const handleMouseDown = (day: number) => {
+    if (!multiSelectMode || isMonthLocked || monthDiff !== 0) return;
     const isPastDay = day < today && monthDiff === 0;
-    if (!multiSelectMode || isMonthLocked || monthDiff !== 0 || isPastDay) return;
+    if (isPastDay && !isManager) return;
+
     setIsDragging(true);
-    toggleDaySelection(day);
+    setDragStartDay(day);
+    setSelectedDays([day]);
   };
 
   const handleMouseEnter = (day: number) => {
+    if (!isDragging || dragStartDay === null) return;
     const isPastDay = day < today && monthDiff === 0;
-    if (!isDragging || isMonthLocked || monthDiff !== 0 || isPastDay || selectedDays.includes(day)) return;
-    toggleDaySelection(day);
+    if (isPastDay && !isManager) return;
+
+    const start = Math.min(dragStartDay, day);
+    const end = Math.max(dragStartDay, day);
+    const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    // For non-managers, filter out past days in the range
+    const filteredRange = isManager ? range : range.filter(d => d >= today);
+    setSelectedDays(filteredRange);
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setDragStartDay(null);
+  };
+
+  const handleTouchStart = (day: number) => {
+    if (isMonthLocked || monthDiff !== 0) return;
+    const isPastDay = day < today && monthDiff === 0;
+    if (isPastDay && !isManager) return;
+
+    // Mobile: Long press (1s) to enter multi-select and start dragging
+    longPressTimer.current = setTimeout(() => {
+      setMultiSelectMode(true);
+      setIsDragging(true);
+      setDragStartDay(day);
+      setSelectedDays([day]);
+      if (navigator.vibrate) navigator.vibrate(50);
+    }, 1000);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || dragStartDay === null) return;
+    
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const dayAttr = element?.closest('[data-day]')?.getAttribute('data-day');
+    
+    if (dayAttr) {
+      const day = parseInt(dayAttr);
+      const isPastDay = day < today && monthDiff === 0;
+      if (isPastDay && !isManager) return;
+
+      const start = Math.min(dragStartDay, day);
+      const end = Math.max(dragStartDay, day);
+      const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+      const filteredRange = isManager ? range : range.filter(d => d >= today);
+      setSelectedDays(filteredRange);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (isDragging) {
+      // If we were dragging, keep the selection but stop dragging state
+      setIsDragging(false);
+      setDragStartDay(null);
+    }
   };
 
   const handleMultiEditSubmit = () => {
@@ -304,9 +352,11 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const [y, m] = currentMonth.split('-');
+      const monthName = bengaliMonths[parseInt(m) - 1];
       return (
         <div className="bg-white/90 backdrop-blur-md border border-slate-100 shadow-xl rounded-xl p-3 text-xs font-bold">
-          <p className="text-slate-800 mb-1">মে {label}</p>
+          <p className="text-slate-800 mb-1">{monthName} {label}</p>
           <p className="text-emerald-500">মিল রেট: ৳ {data.rate}</p>
           <p className="text-indigo-500">মোট বাজার: ৳ {data.market}</p>
           <p className="text-rose-500">মোট মিল: {data.meals}</p>
@@ -316,50 +366,113 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
     return null;
   };
 
-  const { totalMeals, totalMarket, mealRate, chartData } = useMemo(() => {
-    let totalM = 0;
-    allMessMeals.forEach(m => {
-      if (m.selfMeals.morning) totalM += 1;
-      if (m.selfMeals.lunch) totalM += 1;
-      if (m.selfMeals.dinner) totalM += 1;
-      totalM += (m.guestMeals?.morning || 0);
-      totalM += (m.guestMeals?.lunch || 0);
-      totalM += (m.guestMeals?.dinner || 0);
+  const stats = useMemo(() => {
+    let messTotalM = 0;
+    let ownTotalM = 0;
+
+    const filteredMeals = allMessMeals.filter(m => m.date.startsWith(currentMonth));
+
+    filteredMeals.forEach(m => {
+      let mMeals = 0;
+      if (m.selfMeals.morning) mMeals += 1;
+      if (m.selfMeals.lunch) mMeals += 1;
+      if (m.selfMeals.dinner) mMeals += 1;
+      mMeals += (m.guestMeals?.morning || 0);
+      mMeals += (m.guestMeals?.lunch || 0);
+      mMeals += (m.guestMeals?.dinner || 0);
+      
+      messTotalM += mMeals;
+      if (m.userId === userId) {
+        ownTotalM += mMeals;
+      }
     });
 
-    const totalMar = bazarRecords
+    const filteredBazar = bazarRecords.filter(r => r.date.startsWith(currentMonth));
+
+    const messTotalMar = filteredBazar
       .filter(r => r.status === 'Approved' || r.status === 'Done')
       .reduce((sum, r) => sum + r.totalAmount, 0);
 
-    const rate = totalM > 0 ? (totalMar / totalM) : 0;
+    const ownTotalMar = filteredBazar
+      .filter(r => (r.status === 'Approved' || r.status === 'Done') && r.submittedBy === userId)
+      .reduce((sum, r) => sum + r.totalAmount, 0);
 
-    const cData = days.map(d => {
+    const rate = messTotalM > 0 ? (messTotalMar / messTotalM) : 0;
+
+    const messChartData = days.map(d => {
       const dateStr = `${currentMonth}-${d.toString().padStart(2, '0')}`;
 
       let dayMeals = 0;
+      let ownDayMeals = 0;
+
       allMessMeals.filter(m => m.date === dateStr).forEach(m => {
-        if (m.selfMeals.morning) dayMeals += 1;
-        if (m.selfMeals.lunch) dayMeals += 1;
-        if (m.selfMeals.dinner) dayMeals += 1;
-        dayMeals += (m.guestMeals?.morning || 0);
-        dayMeals += (m.guestMeals?.lunch || 0);
-        dayMeals += (m.guestMeals?.dinner || 0);
+        let dm = 0;
+        if (m.selfMeals.morning) dm += 1;
+        if (m.selfMeals.lunch) dm += 1;
+        if (m.selfMeals.dinner) dm += 1;
+        dm += (m.guestMeals?.morning || 0) + (m.guestMeals?.lunch || 0) + (m.guestMeals?.dinner || 0);
+        
+        dayMeals += dm;
+        if (m.userId === userId) ownDayMeals += dm;
       });
 
       const dayMarket = bazarRecords
         .filter(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done'))
         .reduce((sum, r) => sum + r.totalAmount, 0);
+      
+      const ownDayMarket = bazarRecords
+        .filter(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done') && r.submittedBy === userId)
+        .reduce((sum, r) => sum + r.totalAmount, 0);
+
+      const dayRate = dayMeals > 0 ? Math.round((dayMarket / dayMeals) * 10) / 10 : 0;
 
       return {
         day: d.toString(),
         meals: dayMeals,
         market: dayMarket,
-        rate: dayMeals > 0 ? Math.round((dayMarket / dayMeals) * 10) / 10 : 0
+        ownMeals: ownDayMeals,
+        ownMarket: ownDayMarket,
+        rate: dayRate
       };
     });
 
-    return { totalMeals: totalM, totalMarket: totalMar, mealRate: rate, chartData: cData };
-  }, [allMessMeals, bazarRecords, currentMonth, days]);
+    // Calculate a monthly ledger for the currently selected month
+    const currentMonthLedger = members.map(m => {
+      let memberMeals = 0;
+      filteredMeals.filter(meal => meal.userId === m.uid).forEach(meal => {
+        let count = 0;
+        if (meal.selfMeals?.morning) count += 1;
+        if (meal.selfMeals?.lunch) count += 1;
+        if (meal.selfMeals?.dinner) count += 1;
+        count += (meal.guestMeals?.morning || 0) + (meal.guestMeals?.lunch || 0) + (meal.guestMeals?.dinner || 0);
+        memberMeals += count;
+      });
+
+      const memberBazar = filteredBazar
+        .filter(r => r.submittedBy === m.uid && (r.status === 'Approved' || r.status === 'Done'))
+        .reduce((sum, r) => sum + r.totalAmount, 0);
+
+      const memberBalance = memberBazar - (memberMeals * rate);
+
+      return { uid: m.uid, name: m.name, balance: memberBalance };
+    });
+
+    const messPositiveBalance = currentMonthLedger.reduce((sum, member) => sum + (member.balance > 0 ? member.balance : 0), 0);
+    const messNegativeBalance = currentMonthLedger.reduce((sum, member) => sum + (member.balance < 0 ? Math.abs(member.balance) : 0), 0);
+    const ownMonthBalance = currentMonthLedger.find(m => m.uid === userId)?.balance || 0;
+
+    return { 
+      totalMeals: viewType === 'own' ? ownTotalM : messTotalM, 
+      totalMarket: viewType === 'own' ? ownTotalMar : messTotalMar, 
+      mealRate: rate, 
+      chartData: messChartData,
+      messPositiveBalance,
+      messNegativeBalance,
+      ownMonthBalance
+    };
+  }, [allMessMeals, bazarRecords, currentMonth, days, viewType, userId, members]);
+
+  const { totalMeals, totalMarket, mealRate, chartData, messPositiveBalance, messNegativeBalance, ownMonthBalance } = stats;
 
   const handleAssignDuty = async () => {
     if (!messId || !selectedMember || !managerActionDay) return;
@@ -424,26 +537,45 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
 
   return (
     <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-12 h-12 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-          <Utensils className="w-6 h-6 text-white" />
+      {/* Header & Toggle */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+            <Utensils className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-slate-800">মিলের হিসাব</h1>
+            <p className="text-sm font-semibold text-slate-500">ক্যালেন্ডার ও বাজার ট্র্যাকিং</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-black text-slate-800">মিলের হিসাব</h1>
-          <p className="text-sm font-semibold text-slate-500">ক্যালেন্ডার ও বাজার ট্র্যাকিং</p>
-        </div>
+        
+        {isManager && (
+          <div className="flex bg-white/70 backdrop-blur-md border border-slate-200 p-1 rounded-2xl shadow-sm">
+            <button
+              onClick={() => setManagerViewType('own')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${managerViewType === 'own' ? 'bg-[#6366f1] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              আমার ওভারভিউ
+            </button>
+            <button
+              onClick={() => setManagerViewType('mess')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${managerViewType === 'mess' ? 'bg-[#6366f1] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              মেসের ওভারভিউ
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Top Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${viewType === 'mess' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6 mb-8`}>
         <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm">
             <Utensils className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">সর্বমোট মিল (চলতি মাস)</p>
-            <h3 className="text-3xl font-black text-slate-800">{totalMeals}</h3>
+            <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">সর্বমোট মিল ({bengaliMonths[monthNum-1]})</p>
+            <h3 className="text-3xl font-black text-slate-900">{totalMeals}</h3>
           </div>
         </div>
         <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
@@ -451,19 +583,61 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
             <ShoppingCart className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">সর্বমোট বাজার</p>
-            <h3 className="text-3xl font-black text-slate-800">৳ {totalMarket.toLocaleString()}</h3>
+            <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">সর্বমোট বাজার</p>
+            <h3 className="text-3xl font-black text-slate-900">৳ {totalMarket.toLocaleString()}</h3>
           </div>
         </div>
-        <div className="bg-emerald-500/90 backdrop-blur-md border border-emerald-400 shadow-xl shadow-emerald-200 rounded-3xl p-6 flex items-center gap-4 text-white">
-          <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
+        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
             <Calculator className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-1">বর্তমান মিল রেট</p>
-            <h3 className="text-3xl font-black">৳ {mealRate.toFixed(2)}</h3>
+            <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">বর্তমান মিল রেট</p>
+            <h3 className="text-3xl font-black text-slate-900">৳ {mealRate.toFixed(2)}</h3>
           </div>
         </div>
+
+        {viewType === 'mess' ? (
+          <>
+            <div className="bg-emerald-500/90 backdrop-blur-md border border-emerald-400 shadow-xl shadow-emerald-200 rounded-3xl p-6 flex items-center gap-4 text-white">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
+                <Wallet className="w-7 h-7" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">পাবে (Balance)</p>
+                <h3 className="text-3xl font-black">৳ {Math.round(messPositiveBalance).toLocaleString()}</h3>
+              </div>
+            </div>
+            <div className="bg-rose-500/90 backdrop-blur-md border border-rose-400 shadow-xl shadow-rose-200 rounded-3xl p-6 flex items-center gap-4 text-white">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
+                <Wallet className="w-7 h-7" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">দিবে (Balance)</p>
+                <h3 className="text-3xl font-black">৳ {Math.round(messNegativeBalance).toLocaleString()}</h3>
+              </div>
+            </div>
+          </>
+        ) : (
+          (() => {
+            // Always use our calculated month balance for past/future months
+            const balanceAmount = ownMonthBalance;
+            const isReceive = balanceAmount >= 0;
+            const absBalance = Math.abs(Math.round(balanceAmount));
+            
+            return (
+              <div className={`${isReceive ? 'bg-emerald-500/90' : 'bg-rose-500/90'} backdrop-blur-md border ${isReceive ? 'border-emerald-400 shadow-emerald-200' : 'border-rose-400 shadow-rose-200'} shadow-xl rounded-3xl p-6 flex items-center gap-4 text-white transition-colors`}>
+                <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
+                  <Wallet className="w-7 h-7" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">{isReceive ? 'পাবে (Balance)' : 'দিবে (Balance)'}</p>
+                  <h3 className="text-3xl font-black">৳ {absBalance.toLocaleString()}</h3>
+                </div>
+              </div>
+            );
+          })()
+        )}
       </div>
 
       {/* Bazar Warning Banner (For All Members if timer is set and not done) */}
@@ -558,7 +732,7 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
 
           <div className="flex gap-3 shrink-0">
             <button onClick={handleClearMonth} className="px-6 py-3 bg-rose-500 text-white rounded-xl text-sm font-bold hover:bg-rose-600 transition-colors shadow-sm">
-              হ্যাঁ, ক্লিয়ার হয়েছে
+              হ্যাঁ, ক্লিয়ার আছে
             </button>
           </div>
         </div>
@@ -567,8 +741,10 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
       {/* Main Content Grid: Calendar + Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
+
+
         {/* Calendar Section */}
-        <div className="lg:col-span-7 bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6">
+        <div className="lg:col-span-7 bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6 h-full">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
               <h3 className="font-bold text-slate-800 text-xl flex items-center gap-2"><CalendarIcon className="w-6 h-6 text-[#6366f1]" /> মিল ক্যালেন্ডার</h3>
@@ -638,61 +814,56 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
             ))}
 
             {days.map((d) => {
-              const isPast = d < today && isCurrentMonth;
-              const isToday = d === today && isCurrentMonth;
               const isSelected = selectedDays.includes(d);
-
               const dateStr = `${currentMonth}-${d.toString().padStart(2, '0')}`;
               const isSpecial = specialDays[dateStr];
+              
+              const meal = userMeals.find(m => m.date === dateStr);
+              let count = 0;
+              let hasMeal = false;
+              if (meal) {
+                if (meal.selfMeals?.morning) { count += 1; hasMeal = true; }
+                if (meal.selfMeals?.lunch) { count += 1; hasMeal = true; }
+                if (meal.selfMeals?.dinner) { count += 1; hasMeal = true; }
+                const guestCount = (meal.guestMeals?.morning || 0) + (meal.guestMeals?.lunch || 0) + (meal.guestMeals?.dinner || 0);
+                if (guestCount > 0) hasMeal = true;
+                count += guestCount;
+              }
+
+              const isPastDay = monthDiff > 0 || (monthDiff === 0 && d < today);
+              const isUpcomingOrRunning = !isPastDay;
+              const isToday = monthDiff === 0 && d === today;
 
               return (
                 <div
                   key={d}
-                  onClick={() => handleDayClick(d)}
+                  data-day={d}
+                  onClick={() => !isDragging && handleDayClick(d)}
                   onMouseDown={() => handleMouseDown(d)}
                   onMouseEnter={() => handleMouseEnter(d)}
                   onMouseUp={handleMouseUp}
+                  onTouchStart={() => handleTouchStart(d)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
                   className={`
-                    aspect-square rounded-2xl flex items-center justify-center font-bold text-lg transition-all cursor-pointer relative overflow-hidden group select-none
-                    ${isPast ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}
-                    ${isToday && !isSpecial ? 'bg-[#6366f1] text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] ring-2 ring-indigo-200 ring-offset-2' : ''}
-                    ${!isPast && !isToday && !isSelected && !isSpecial ? 'bg-white border border-slate-100 text-slate-700 hover:bg-[#6366f1] hover:text-white hover:shadow-lg' : ''}
-                    ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 ring-2 ring-emerald-200 ring-offset-2 scale-95' : ''}
-                    ${isSpecial ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_0_25px_rgba(245,158,11,0.6)] ring-2 ring-amber-200 ring-offset-2 z-10' : ''}
-                    ${isLocked(d) ? 'opacity-70 bg-slate-100' : ''}
+                    aspect-square rounded-2xl transition-all cursor-pointer relative overflow-hidden group border
+                    ${isSelected ? 'bg-indigo-600 border-indigo-700 shadow-lg' : isToday ? 'bg-indigo-50 border-[#6366f1]' : 'bg-slate-50 border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30'}
                   `}
                 >
-                  <span className={`absolute top-2 left-2 text-[10px] ${isToday || isSpecial ? 'opacity-80' : 'opacity-40'}`}>{d}</span>
+                  {/* Date in top left */}
+                  <div className={`absolute top-2 left-3 text-[13px] font-black z-20 ${isSelected ? 'text-white/80' : isPastDay ? 'text-[#94a3b8]' : 'text-slate-900'}`}>
+                    {d}
+                  </div>
 
-                  {isLocked(d) && (
-                    <div className="absolute top-2 right-2">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                    </div>
-                  )}
-
-                  {isSpecial ? (
-                    <div className="flex flex-col items-center justify-center pt-2">
-                      <Star className="w-5 h-5 fill-white text-white opacity-90 mb-1" />
-                    </div>
-                  ) : isPast ? (
-                    <span>
-                      {(() => {
-                        const meal = userMeals.find(m => m.date === dateStr);
-                        if (!meal) return '0';
-                        let count = 0;
-                        if (meal.selfMeals?.morning) count += 1;
-                        if (meal.selfMeals?.lunch) count += 1;
-                        if (meal.selfMeals?.dinner) count += 1;
-                        const guestCount = (meal.guestMeals?.morning || 0) + (meal.guestMeals?.lunch || 0) + (meal.guestMeals?.dinner || 0);
-                        return count + guestCount;
-                      })()}
+                  {/* Meal Value in middle */}
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <span className={`text-3xl font-black ${isSelected ? 'text-white' : 'text-[#6366f1]'}`}>
+                      {hasMeal ? count : (isUpcomingOrRunning ? <Plus className="w-8 h-8" strokeWidth={4} /> : '0')}
                     </span>
-                  ) : (
-                    <Plus className={`w-6 h-6 ${isToday || isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white transition-colors'}`} />
-                  )}
+                  </div>
 
-                  {isSelected && <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center"><Check className="w-8 h-8 text-white opacity-50" /></div>}
-                  {isSpecial && <div className="absolute bottom-1 w-full text-center text-[8px] font-black uppercase tracking-widest opacity-90 px-1 truncate">{isSpecial}</div>}
+                  {isSelected && <div className="absolute inset-0 bg-white/10 z-0"></div>}
+                  {isSpecial && <div className={`absolute bottom-1.5 w-full text-center text-[7px] font-black uppercase tracking-widest px-1 truncate z-20 ${isSelected ? 'text-white/70' : 'text-amber-600'}`}>{isSpecial}</div>}
                 </div>
               );
             })}
@@ -706,46 +877,109 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Duty Roster & Special Days Info List */}
-          <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col gap-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">এই মাসের অ্যাসাইনমেন্ট</h4>
-            {Object.entries(assignedDuties).filter(([dateStr]) => dateStr.startsWith(currentMonth)).length === 0 && (
-              <p className="text-xs text-slate-400 font-semibold">কোনো ডিউটি অ্যাসাইন করা হয়নি।</p>
-            )}
-            {Object.entries(assignedDuties)
-              .filter(([dateStr]) => dateStr.startsWith(currentMonth))
-              .sort()
-              .map(([dateStr, member]) => {
-                const day = dateStr.split('-')[2];
-                return (
-                  <div key={dateStr} className="flex justify-between items-center bg-slate-50 border border-slate-100 p-3 rounded-xl">
-                    <span className="text-xs font-bold text-slate-500">মে {parseInt(day)}</span>
-                    <span className="text-sm font-bold text-slate-800 flex items-center gap-2"><User className="w-4 h-4 text-[#6366f1]" /> {String(member)}</span>
-                  </div>
-                );
-              })
-            }
-          </div>
-
         </div>
 
-        {/* Charts Section */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
-          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6 h-full min-h-[300px] flex flex-col">
-            <h3 className="font-bold text-slate-800 text-lg mb-6">দৈনন্দিন বাজার ও মিল গ্রাফ</h3>
-            <div className="flex-1 w-full">
+        {/* Assignment Section */}
+        <div className="lg:col-span-5 h-full">
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6 flex flex-col h-full overflow-hidden">
+            <h3 className="font-bold text-slate-800 text-lg mb-6 flex items-center gap-3">
+              <ShoppingCart className="w-5 h-5 text-indigo-500" /> বাজারের দিন
+            </h3>
+            <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
+              {Object.entries(assignedDuties).filter(([dateStr]) => dateStr.startsWith(currentMonth)).length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full opacity-40">
+                  <ShoppingCart className="w-10 h-10 mb-2" />
+                  <p className="text-sm font-bold">কোনো ডিউটি অ্যাসাইন করা হয়নি</p>
+                </div>
+              )}
+              {(() => {
+                const colors = [
+                  'bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100', 
+                  'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100', 
+                  'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100', 
+                  'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100', 
+                  'bg-purple-50 border-purple-100 text-purple-700 hover:bg-purple-100', 
+                  'bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100',
+                  'bg-orange-50 border-orange-100 text-orange-700 hover:bg-orange-100',
+                  'bg-teal-50 border-teal-100 text-teal-700 hover:bg-teal-100'
+                ];
+                const nameToColorMap: { [key: string]: string } = {};
+                let colorIdx = 0;
+
+                const duties = Object.entries(assignedDuties)
+                  .filter(([dateStr]) => dateStr.startsWith(currentMonth))
+                  .sort();
+
+                if (duties.length === 0) return null;
+
+                return duties.map(([dateStr, member]) => {
+                    const dayNum = parseInt(dateStr.split('-')[2]) || 0;
+                    const memberIdOrName = String(member);
+                    const memberObj = getMemberData(memberIdOrName);
+                    const displayName = memberObj?.name || memberIdOrName;
+                    
+                    if (!nameToColorMap[displayName]) {
+                      nameToColorMap[displayName] = colors[colorIdx % colors.length];
+                      colorIdx++;
+                    }
+                    return (
+                      <div key={dateStr} className={`flex justify-between items-center p-3 rounded-2xl border shadow-sm transition-all hover:shadow-md cursor-pointer ${nameToColorMap[displayName]}`}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white/60 rounded-xl flex items-center justify-center font-black text-sm shadow-sm">
+                            {dayNum}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {memberObj?.photoURL ? (
+                              <img src={memberObj.photoURL} alt={displayName} className="w-7 h-7 rounded-full object-cover border border-white/40" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-white/40 flex items-center justify-center">
+                                <User className="w-4 h-4" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">বাজার ডিউটি</p>
+                              <h4 className="text-sm font-black truncate max-w-[120px]">{displayName}</h4>
+                            </div>
+                          </div>
+                        </div>
+                        <CalendarIcon className="w-4 h-4 opacity-40" />
+                      </div>
+                    );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Full width Graph Section */}
+        <div className="lg:col-span-12 mt-8">
+          {/* Graph Card */}
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-8 min-h-[450px] flex flex-col">
+            <h3 className="font-bold text-slate-800 text-xl mb-8 flex items-center gap-3">
+              <Calculator className="w-6 h-6 text-indigo-500" /> খরচ বনাম মিল গ্রাফ
+            </h3>
+            <div className="w-full h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 600 }} />
+                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 600 }} />
+                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 600 }} />
                   <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 2, strokeDasharray: '5 5' }} />
-                  <Line yAxisId="left" type="monotone" dataKey="market" stroke="#6366f1" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} />
-                  <Line yAxisId="right" type="monotone" dataKey="meals" stroke="#f43f5e" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0, fill: '#f43f5e' }} />
+                  <Line yAxisId="left" type="monotone" dataKey="market" stroke="#6366f1" strokeWidth={5} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0, fill: '#6366f1' }} />
+                  <Line yAxisId="right" type="monotone" dataKey="meals" stroke="#f43f5e" strokeWidth={5} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0, fill: '#f43f5e' }} />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+            <div className="flex items-center justify-center gap-8 mt-8">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-indigo-500 shadow-sm shadow-indigo-200"></div>
+                <span className="text-xs font-bold text-slate-500">মোট বাজার</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm shadow-rose-200"></div>
+                <span className="text-xs font-bold text-slate-500">মোট মিল</span>
+              </div>
             </div>
           </div>
         </div>
@@ -760,7 +994,7 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
               <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
                   <h3 className="font-black text-slate-800 text-lg">অ্যাডমিন কন্ট্রোল</h3>
-                  <p className="text-xs font-bold text-slate-500">মে {managerActionDay} তারিখের জন্য</p>
+                  <p className="text-xs font-bold text-slate-500">{formatMonthYear(currentMonth)} {managerActionDay} তারিখের জন্য</p>
                 </div>
                 <button onClick={() => setManagerActionDay(null)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-400 hover:text-slate-800"><X className="w-4 h-4" /></button>
               </div>
@@ -770,6 +1004,8 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                 const dateStr = `${currentMonth}-${managerActionDay.toString().padStart(2, '0')}`;
                 const special = specialDays[dateStr];
                 const duty = assignedDuties[dateStr];
+                const dutyMember = getMemberData(duty);
+                const dutyName = dutyMember?.name || duty;
                 const myMeal = userMeals.find(m => m.date === dateStr);
                 const myMealCount = myMeal ? (
                   (myMeal.selfMeals?.morning ? 1 : 0) +
@@ -811,15 +1047,13 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                     </div>
 
                     {/* Duty Bar */}
-                    {duty ? (() => {
-                      const dutyMember = members.find(m => m.name === duty);
-                      return (
+                    {duty ? (
                         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-emerald-200/50 mt-1">
                           <div className="flex items-center gap-3">
                             <ShoppingCart className="w-5 h-5 text-white/80" />
                             <div>
                               <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider leading-none mb-1">আজকে বাজার করবেন</p>
-                              <p className="text-white font-black text-sm leading-none">{String(duty)}</p>
+                              <p className="text-white font-black text-sm leading-none">{dutyName}</p>
                             </div>
                           </div>
                           {dutyMember?.photoURL ? (
@@ -830,8 +1064,7 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                             </div>
                           )}
                         </div>
-                      );
-                    })() : (
+                    ) : (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-center justify-center mt-1">
                         <p className="text-slate-400 font-bold text-xs flex items-center gap-2">
                           <ShoppingCart className="w-4 h-4" /> বাজার দিন অ্যাসাইন করা হয়নি
@@ -843,42 +1076,94 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
               })()}
 
               <div className="p-4 flex flex-col gap-2">
-                <button
-                  onClick={() => { setEditingDays([managerActionDay]); resetMealState([managerActionDay]); setIsModalOpen(true); setManagerActionDay(null); }}
-                  className="w-full text-left px-5 py-4 bg-slate-50 hover:bg-[#6366f1]/10 hover:text-[#6366f1] text-slate-700 font-bold rounded-2xl transition-colors flex items-center gap-3"
-                >
-                  <Utensils className="w-5 h-5" /> নিজের মিল সেট করুন
-                </button>
-                <button
-                  onClick={() => {
-                    const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
-                    let existingSpecial = specialDays[dateStr] || '';
-                    let foundTime = 'সারাদিন';
-                    for (const t of specialTimes) {
-                      if (existingSpecial.endsWith(` (${t})`)) {
-                        foundTime = t;
-                        existingSpecial = existingSpecial.replace(` (${t})`, '');
-                        break;
-                      }
-                    }
-                    setEventName(existingSpecial);
-                    setEventTime(foundTime);
-                    setIsSpecialDayModalOpen(true);
-                  }}
-                  className="w-full text-left px-5 py-4 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold rounded-2xl transition-colors flex items-center gap-3"
-                >
-                  <Star className="w-5 h-5" /> বিশেষ দিন (Special Day) তৈরি করুন
-                </button>
-                <button
-                  onClick={() => {
-                    const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
-                    setSelectedMember(assignedDuties[dateStr] || '');
-                    setIsAssignDutyModalOpen(true);
-                  }}
-                  className="w-full text-left px-5 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold rounded-2xl transition-colors flex items-center gap-3"
-                >
-                  <User className="w-5 h-5" /> বাজার দিন অ্যাসাইন করুন
-                </button>
+                {(() => {
+                  const day = managerActionDay as number;
+                  const dateStr = `${currentMonth}-${day.toString().padStart(2, '0')}`;
+                  const expectedTimeMs = bazarTimers[dateStr];
+                  const isBazarDone = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedTimeMs === 'DONE';
+                  const isDayLocked = isMonthLocked || isBazarDone;
+
+                  if (isDayLocked) return (
+                    <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center gap-1 text-center">
+                      <Clock className="w-5 h-5 text-slate-400" />
+                      <p className="text-xs font-bold text-slate-500">এই দিনের হিসাব লক করা হয়েছে</p>
+                    </div>
+                  );
+
+                  return (
+                    <>
+                      <button
+                        onClick={() => {
+                          const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
+
+                          if (!isManager && !isBazarAssignedToMe) {
+                            if (monthDiff !== 0) {
+                              alert('আপনি শুধু চলতি মাসের মিল এডিট করতে পারবেন।');
+                              return;
+                            }
+                            if (day < today && monthDiff === 0) {
+                              alert('অতীতের মিল এডিট করার সময় শেষ।');
+                              return;
+                            }
+                            const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
+                            if (hasTimeCrossed) {
+                              alert(`মে ${day} তারিখের বাজার করার সময় শেষ। মিল পরিবর্তন করা সম্ভব নয়।`);
+                              return;
+                            }
+                          }
+
+                          setEditingDays([day]);
+                          resetMealState([day]);
+                          setIsModalOpen(true);
+                          setManagerActionDay(null);
+                        }}
+                        className="w-full text-left px-5 py-4 bg-slate-50 hover:bg-[#6366f1]/10 hover:text-[#6366f1] text-slate-700 font-bold rounded-2xl transition-colors flex items-center gap-3"
+                      >
+                        <Utensils className="w-5 h-5" /> নিজের মিল সেট করুন
+                      </button>
+                      
+                      {(() => {
+                        const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
+                        
+                        if (isManager || isBazarAssignedToMe) {
+                          return (
+                            <>
+                              <button
+                                onClick={() => {
+                                  let existingSpecial = specialDays[dateStr] || '';
+                                  let foundTime = 'সারাদিন';
+                                  for (const t of specialTimes) {
+                                    if (existingSpecial.endsWith(` (${t})`)) {
+                                      foundTime = t;
+                                      existingSpecial = existingSpecial.replace(` (${t})`, '');
+                                      break;
+                                    }
+                                  }
+                                  setEventName(existingSpecial);
+                                  setEventTime(foundTime);
+                                  setIsSpecialDayModalOpen(true);
+                                }}
+                                className="w-full text-left px-5 py-4 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold rounded-2xl transition-colors flex items-center gap-3"
+                              >
+                                <Star className="w-5 h-5" /> বিশেষ দিন (Special Day) তৈরি করুন
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedMember(assignedDuties[dateStr] || '');
+                                  setIsAssignDutyModalOpen(true);
+                                }}
+                                className="w-full text-left px-5 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold rounded-2xl transition-colors flex items-center gap-3"
+                              >
+                                <User className="w-5 h-5" /> বাজার দিন অ্যাসাইন করুন
+                              </button>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Day Overview Member List */}
@@ -897,10 +1182,25 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                       memberTotal += (memberMeal.guestMeals?.lunch || 0);
                       memberTotal += (memberMeal.guestMeals?.dinner || 0);
                     }
+                    const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
+                    const canEditOthers = isManager || isBazarAssignedToMe;
+                    
                     return (
                       <div 
                         key={member.uid} 
                         onClick={() => {
+                          if (!canEditOthers && member.uid !== userId) return;
+                          
+                          if (!canEditOthers && member.uid === userId) {
+                            if (monthDiff !== 0) { alert('আপনি শুধু চলতি মাসের মিল এডিট করতে পারবেন।'); return; }
+                            const day = managerActionDay as number;
+                            if (day < today && monthDiff === 0) { alert('অতীতের মিল এডিট করার সময় শেষ।'); return; }
+                            const expectedTimeMs = bazarTimers[dateStr];
+                            const isBazarDone = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedTimeMs === 'DONE';
+                            const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
+                            if (isBazarDone || hasTimeCrossed) { alert(`মে ${day} তারিখের বাজার সম্পন্ন হয়েছে বা সময় শেষ। মিল পরিবর্তন করা সম্ভব নয়।`); return; }
+                          }
+
                           setEditingUserId(member.uid);
                           setEditingUserName(member.name);
                           setEditingDays([managerActionDay as number]);
@@ -908,7 +1208,7 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                           setIsModalOpen(true);
                           setManagerActionDay(null);
                         }}
-                        className="flex items-center justify-between px-3 py-2 hover:bg-[#6366f1]/10 rounded-xl transition-colors cursor-pointer group"
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${canEditOthers || member.uid === userId ? 'hover:bg-[#6366f1]/10 cursor-pointer group' : ''}`}
                       >
                         <div className="flex items-center gap-3">
                           {member.photoURL ? (
@@ -1006,7 +1306,7 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                   onClick={() => setIsMemberDropdownOpen(!isMemberDropdownOpen)}
                   className="w-full bg-slate-50 border border-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl flex justify-between items-center cursor-pointer hover:border-emerald-300 transition-colors"
                 >
-                  <span className="truncate">{selectedMember || "মেম্বার সিলেক্ট করুন"}</span>
+                  <span className="truncate">{getMemberData(selectedMember)?.name || "মেম্বার সিলেক্ট করুন"}</span>
                   <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${isMemberDropdownOpen ? 'rotate-90' : ''}`} />
                 </div>
                 <AnimatePresence>
@@ -1021,8 +1321,8 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                         {members.map(m => (
                           <div
                             key={m.uid}
-                            onClick={() => { setSelectedMember(m.name); setIsMemberDropdownOpen(false); }}
-                            className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${selectedMember === m.name ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                            onClick={() => { setSelectedMember(m.uid); setIsMemberDropdownOpen(false); }}
+                            className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${selectedMember === m.uid ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
                           >
                             {m.photoURL ? (
                               <img src={m.photoURL} alt={m.name} className="w-6 h-6 rounded-full object-cover shadow-sm" />
@@ -1031,7 +1331,7 @@ export default function MealsView({ isManager, messId, userId, userName, messDat
                                 <User className="w-3 h-3 text-emerald-600" />
                               </div>
                             )}
-                            <span className={`text-sm font-bold ${selectedMember === m.name ? 'text-emerald-600' : 'text-slate-600'}`}>{m.name}</span>
+                            <span className={`text-sm font-bold ${selectedMember === m.uid ? 'text-emerald-600' : 'text-slate-600'}`}>{m.name}</span>
                           </div>
                         ))}
                       </div>

@@ -29,7 +29,7 @@ import SummaryView from '../views/SummaryView';
 import NoticeView from '../views/NoticeView';
 import SettingsView from '../views/SettingsView';
 
-import { listenToMemberFinancials, MemberFinancials, listenToMessFinancials, MessFinancials } from '../services/financialService';
+import { listenToMemberFinancials, MemberFinancials, listenToMessFinancials, MessFinancials, listenToFullLedger, MemberLedger } from '../services/financialService';
 
 const expenseData = [
   { name: 'Jan', expense: 4000, market: 2400 },
@@ -64,6 +64,8 @@ export default function DashboardPage() {
   const [dashboardNotices, setDashboardNotices] = useState<any[]>([]);
   const [financials, setFinancials] = useState<MemberFinancials | null>(null);
   const [messFinancials, setMessFinancials] = useState<MessFinancials | null>(null);
+  const [fullLedger, setFullLedger] = useState<MemberLedger[]>([]);
+  const [fullMessStats, setFullMessStats] = useState<any>(null);
 
   // Edit Profile State
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -146,6 +148,21 @@ export default function DashboardPage() {
                   currentMonth,
                   (stats) => setMessFinancials(stats)
                 );
+
+                const unsubscribeLedger = listenToFullLedger(
+                  data.messId,
+                  currentMonth,
+                  (ledger, stats) => {
+                    setFullLedger(ledger);
+                    setFullMessStats(stats);
+                  }
+                );
+                
+                const originalUnsubMessStats = unsubscribeMessStats;
+                unsubscribeMessStats = () => {
+                  originalUnsubMessStats();
+                  unsubscribeLedger();
+                };
               }
 
               return () => {
@@ -195,7 +212,18 @@ export default function DashboardPage() {
         {activeView === 'members' ? (
           <MembersView isManager={isManager} messId={userProfile?.messId} />
         ) : activeView === 'meals' ? (
-          <MealsView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} members={allMembers} />
+          <MealsView 
+            isManager={isManager} 
+            messId={userProfile?.messId} 
+            userId={userProfile?.uid} 
+            userName={userProfile?.name} 
+            messData={messData} 
+            members={allMembers} 
+            financials={financials}
+            messFinancials={messFinancials}
+            fullLedger={fullLedger}
+            fullMessStats={fullMessStats}
+          />
         ) : activeView === 'bazar' ? (
           <BazarView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} />
         ) : activeView === 'payments' ? (
