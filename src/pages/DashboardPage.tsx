@@ -195,7 +195,7 @@ export default function DashboardPage() {
         {activeView === 'members' ? (
           <MembersView isManager={isManager} messId={userProfile?.messId} />
         ) : activeView === 'meals' ? (
-          <MealsView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} />
+          <MealsView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} members={allMembers} />
         ) : activeView === 'bazar' ? (
           <BazarView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} />
         ) : activeView === 'payments' ? (

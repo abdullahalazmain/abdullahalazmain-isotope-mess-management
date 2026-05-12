@@ -26,7 +26,8 @@ import {
   serverTimestamp,
   Timestamp,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  deleteField
 } from 'firebase/firestore';
 
 // TODO: Replace these with your actual Firebase Project credentials
@@ -72,5 +73,6 @@ export {
   serverTimestamp,
   Timestamp,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  deleteField
 };
