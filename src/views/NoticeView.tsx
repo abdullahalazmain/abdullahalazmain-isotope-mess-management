@@ -10,8 +10,9 @@ import {
 } from '../services/noticeService';
 import { Notice, UserProfile } from '../types';
 
-export default function NoticeView({ isManager, messId, userId }: { isManager: boolean, messId?: string, userId?: string }) {
+export default function NoticeView({ isManager, messId, userId, openNoticeId }: { isManager: boolean, messId?: string, userId?: string, openNoticeId?: string | null }) {
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,6 +52,13 @@ export default function NoticeView({ isManager, messId, userId }: { isManager: b
       unsubscribeNotices();
     };
   }, [messId, isManager, userId]);
+
+  useEffect(() => {
+    if (openNoticeId && notices.length > 0) {
+      const notice = notices.find(n => n.id === openNoticeId);
+      if (notice) setSelectedNotice(notice);
+    }
+  }, [openNoticeId, notices]);
 
   const handleDelete = async (id: string) => {
     if (isManager) {
@@ -141,9 +149,10 @@ export default function NoticeView({ isManager, messId, userId }: { isManager: b
                 initial={{ opacity: 0, x: -20 }} 
                 animate={{ opacity: 1, x: 0 }} 
                 exit={{ opacity: 0, scale: 0.95 }}
-                className={`group relative overflow-hidden bg-white/70 backdrop-blur-md shadow-xl rounded-[2rem] p-6 md:p-8 border-2 transition-all hover:shadow-2xl ${
-                  notice.isUrgent ? 'border-rose-400/30 bg-rose-50/20 shadow-rose-100' : 'border-white/40'
-                } ${!isRead && !isManager ? 'border-indigo-400/30' : ''}`}
+                onClick={() => setSelectedNotice(notice)}
+                className={`group relative overflow-hidden bg-white shadow-md rounded-2xl p-4 border transition-all hover:shadow-lg cursor-pointer ${
+                  notice.isUrgent ? 'border-rose-200 bg-rose-50/10' : 'border-slate-100'
+                } ${!isRead && !isManager ? 'border-indigo-200 bg-indigo-50/5' : ''}`}
               >
                 {/* Urgent Indicator Bar */}
                 {notice.isUrgent && (
@@ -152,9 +161,9 @@ export default function NoticeView({ isManager, messId, userId }: { isManager: b
 
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md transition-transform group-hover:scale-110 ${notice.isUrgent ? 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-rose-200' : 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-indigo-200'}`}>
-                        <Megaphone className="w-6 h-6" />
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-105 ${notice.isUrgent ? 'bg-rose-500 text-white' : 'bg-indigo-500 text-white'}`}>
+                        <Megaphone className="w-5 h-5" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -165,63 +174,51 @@ export default function NoticeView({ isManager, messId, userId }: { isManager: b
                              <span className="px-3 py-1 bg-rose-500 text-white text-[9px] font-black uppercase rounded-full shadow-lg shadow-rose-200 animate-pulse">URGENT</span>
                            )}
                         </div>
-                        <p className="text-sm font-black text-slate-800">ম্যানেজার থেকে <span className="text-indigo-500 ml-1">#বার্তা</span></p>
+                         <p className="text-[11px] font-bold text-slate-800">ম্যানেজার <span className="text-indigo-500">#নোটিশ</span></p>
                       </div>
                     </div>
 
-                    <h3 className={`text-2xl font-black mb-3 tracking-tight ${notice.isUrgent ? 'text-rose-700' : 'text-slate-800'}`}>
+                    <h3 className={`text-base font-black mb-1 tracking-tight ${notice.isUrgent ? 'text-rose-700' : 'text-slate-800'}`}>
                       {notice.title}
                     </h3>
-                    <p className="text-base font-semibold text-slate-600 leading-relaxed max-w-4xl bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                      {notice.description}
-                    </p>
 
                     {/* Member Action Buttons (Below Content) */}
-                    {!isManager && (
-                      <div className="mt-6 flex items-center gap-4">
-                        {!isRead ? (
-                          <button 
-                            onClick={() => handleMarkAsRead(notice.id)}
-                            className="px-8 py-3 bg-indigo-600 text-white text-xs font-black rounded-2xl shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:scale-105 transition-all flex items-center gap-2"
-                          >
-                            <Check className="w-4 h-4" /> পড়া হয়েছে
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => handleDelete(notice.id)}
-                            className="px-8 py-3 bg-white text-rose-500 border-2 border-rose-100 text-xs font-black rounded-2xl hover:bg-rose-50 hover:border-rose-500 transition-all flex items-center gap-2"
-                          >
-                            <Trash2 className="w-4 h-4" /> নোটিশ মুছে দিন
-                          </button>
-                        )}
+                    {!isRead && !isManager && (
+                      <div className="mt-4 flex items-center gap-3">
+                        <button 
+                          onClick={() => handleMarkAsRead(notice.id)}
+                          className="px-6 py-2 bg-indigo-600 text-white text-[11px] font-black rounded-xl shadow-md hover:bg-indigo-700 transition-all flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" /> পড়া হয়েছে
+                        </button>
                       </div>
                     )}
                   </div>
 
                   {/* Right Side Info/Actions */}
-                  <div className="flex flex-row md:flex-col items-center gap-6 border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 md:pl-10 shrink-0">
+                  <div className="flex flex-row md:flex-col items-center gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6 shrink-0">
                     {isManager ? (
                       <>
-                        <div className="flex flex-col items-center bg-indigo-50/50 p-4 rounded-3xl border border-indigo-100/50 w-24">
-                          <div className="text-3xl font-black text-indigo-600 leading-none">{notice.readBy?.length || 0}</div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase mt-1 tracking-widest">পঠিত</p>
+                        <div className="flex flex-col items-center bg-indigo-50 p-2 rounded-xl border border-indigo-100 w-16">
+                          <div className="text-xl font-black text-indigo-600 leading-none">{notice.readBy?.length || 0}</div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase mt-0.5 tracking-widest">পঠিত</p>
                         </div>
                         <button 
                           onClick={() => handleDelete(notice.id)}
-                          className="w-16 h-16 rounded-[1.5rem] bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-xl shadow-rose-100 hover:rotate-6 active:scale-90"
+                          className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm"
                           title="Delete for Everyone"
                         >
-                          <Trash2 className="w-7 h-7" />
+                          <Trash2 className="w-5 h-5" />
                         </button>
                       </>
                     ) : (
                       isRead && (
-                        <div className="hidden md:flex flex-col items-center text-emerald-500 bg-emerald-50 p-5 rounded-[2rem] border-2 border-emerald-100 shadow-lg shadow-emerald-50">
-                          <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center mb-2 shadow-lg shadow-emerald-200">
-                             <Check className="w-6 h-6" />
-                          </div>
-                          <p className="text-[10px] font-black uppercase tracking-widest">পড়া হয়েছে</p>
-                        </div>
+                        <button 
+                          onClick={() => handleDelete(notice.id)}
+                          className="px-4 py-2 bg-white text-rose-400 border border-rose-100 text-[10px] font-bold rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> মুছে দিন
+                        </button>
                       )
                     )}
                   </div>
@@ -329,6 +326,75 @@ export default function NoticeView({ isManager, messId, userId }: { isManager: b
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* NOTICE DETAIL POPUP */}
+      <AnimatePresence>
+        {selectedNotice && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedNotice(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col">
+              
+              <div className={`p-8 ${selectedNotice.isUrgent ? 'bg-rose-600' : 'bg-indigo-600'} text-white relative overflow-hidden`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+                <div className="flex justify-between items-start relative z-10">
+                   <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/20">
+                        <Megaphone className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black leading-tight">{selectedNotice.title}</h2>
+                        <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-1">ম্যানেজার থেকে বিশেষ নোটিশ</p>
+                      </div>
+                   </div>
+                   <button onClick={() => setSelectedNotice(null)} className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"><X className="w-5 h-5 text-white" /></button>
+                </div>
+              </div>
+
+              <div className="p-8">
+                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 mb-8 shadow-inner">
+                  <p className="text-slate-700 font-semibold leading-relaxed text-base whitespace-pre-wrap">
+                    {selectedNotice.description}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-400">
+                      {selectedNotice.createdAt ? new Date(selectedNotice.createdAt.seconds * 1000).toLocaleString('bn-BD', { month: 'long', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                  
+                  {selectedNotice.isUrgent && (
+                    <span className="px-4 py-1.5 bg-rose-500 text-white text-[10px] font-black rounded-full shadow-lg shadow-rose-200">URGENT</span>
+                  )}
+                </div>
+
+                {!isManager && userId && !selectedNotice.readBy?.includes(userId) && (
+                  <button 
+                    onClick={() => {
+                      handleMarkAsRead(selectedNotice.id);
+                      setSelectedNotice(null);
+                    }}
+                    className="w-full mt-8 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
+                  >
+                    <Check className="w-5 h-5" /> নোটিশটি পড়া হয়েছে
+                  </button>
+                )}
+                
+                {(!userId || isManager || (userId && selectedNotice.readBy?.includes(userId))) && (
+                   <button 
+                    onClick={() => setSelectedNotice(null)}
+                    className="w-full mt-8 py-4 bg-slate-800 text-white rounded-2xl font-black shadow-xl flex items-center justify-center gap-2"
+                  >
+                    বন্ধ করুন
+                  </button>
+                )}
+              </div>
             </motion.div>
           </div>
         )}

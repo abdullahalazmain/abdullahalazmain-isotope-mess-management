@@ -162,16 +162,6 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
     } catch (e) { console.error(e); }
   };
 
-  const shopperStats = useMemo(() => {
-    const stats: Record<string, { count: number; total: number; name: string }> = {};
-    records.filter(r => r.status === 'Approved').forEach(r => {
-      const uid = r.submittedBy;
-      if (!stats[uid]) stats[uid] = { count: 0, total: 0, name: r.submitterName };
-      stats[uid].count += 1;
-      stats[uid].total += r.totalAmount;
-    });
-    return Object.entries(stats).sort((a, b) => b[1].count - a[1].count);
-  }, [records]);
 
   return (
     <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
@@ -336,31 +326,6 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
 
       {/* Analytics & Leaderboard Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {/* LEADERBOARD CARD */}
-        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6">
-          <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-500" /> সেরা বাজারকারী (এই মাস)
-          </h3>
-          <div className="flex flex-col gap-3">
-            {shopperStats.slice(0, 3).map(([uid, stat], idx) => (
-              <div key={uid} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600' : idx === 1 ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>
-                    {idx + 1}
-                  </div>
-                  <div>
-                    <p className="text-xs font-black text-slate-700">{stat.name}</p>
-                    <p className="text-[9px] font-bold text-slate-400">{stat.count} বার বাজার করেছে</p>
-                  </div>
-                </div>
-                <p className="text-xs font-black text-[#6366f1]">৳ {stat.total.toLocaleString()}</p>
-              </div>
-            ))}
-            {shopperStats.length === 0 && (
-              <p className="text-[10px] text-center text-slate-400 py-4 italic">এখনও কোনো অনুমোদিত বাজার নেই</p>
-            )}
-          </div>
-        </div>
 
         {/* PRICE GUIDE */}
         <div className="bg-indigo-900 text-white rounded-[2rem] p-6 shadow-xl relative overflow-hidden">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, doc, onSnapshot, collection, query, where, updateDoc } from '../firebase';
+import { auth, db, doc, onSnapshot, collection, query, where, updateDoc, arrayUnion } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
   Utensils, 
@@ -66,6 +66,9 @@ export default function DashboardPage() {
   const [messFinancials, setMessFinancials] = useState<MessFinancials | null>(null);
   const [fullLedger, setFullLedger] = useState<MemberLedger[]>([]);
   const [fullMessStats, setFullMessStats] = useState<any>(null);
+  const [unreadNoticesCount, setUnreadNoticesCount] = useState(0);
+  const [unreadNotices, setUnreadNotices] = useState<any[]>([]);
+  const [noticeToOpen, setNoticeToOpen] = useState<string | null>(null);
 
   // Edit Profile State
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -124,12 +127,23 @@ export default function DashboardPage() {
                 setAllMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
               });
 
-              // 3. Listen to Notices for Dashboard
+              // 3. Listen to Notices for Dashboard & Count
               const noticesQuery = query(collection(db, 'notices'), where('messId', '==', data.messId));
               const unsubscribeNotices = onSnapshot(noticesQuery, (snapshot) => {
-                const noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                noticesList.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-                setDashboardNotices(noticesList.slice(0, 3));
+                const noticesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+                
+                // Filter for user (consistent with NoticeView logic)
+                const relevantNotices = noticesList.filter(n => 
+                  !n.hiddenBy?.includes(user.uid) && 
+                  (n.recipients === 'all' || (Array.isArray(n.recipients) && n.recipients.includes(user.uid)))
+                );
+
+                const unreadItems = relevantNotices.filter(n => !n.readBy?.includes(user.uid));
+                setUnreadNoticesCount(unreadItems.length);
+                setUnreadNotices(unreadItems);
+
+                relevantNotices.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                setDashboardNotices(relevantNotices.slice(0, 3));
               });
 
               // 4. Listen to Financials
@@ -185,6 +199,18 @@ export default function DashboardPage() {
     return () => unsubscribeAuth();
   }, []);
 
+  const markAllNoticesAsRead = async () => {
+    if (!userProfile?.uid || !userProfile?.messId || unreadNoticesCount === 0) return;
+    try {
+      const promises = unreadNotices.map(n => 
+        updateDoc(doc(db, 'notices', n.id), {
+          readBy: arrayUnion(userProfile.uid)
+        })
+      );
+      await Promise.all(promises);
+    } catch (err) { console.error(err); }
+  };
+
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
   if (loading && !userProfile) {
@@ -207,7 +233,23 @@ export default function DashboardPage() {
       />
       
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-28' : 'ml-4'} pl-4 pr-10 py-8 h-screen overflow-y-auto no-scrollbar relative`}>
-        <DashboardNavbar isSidebarOpen={isSidebarOpen} />
+        <DashboardNavbar 
+          isSidebarOpen={isSidebarOpen} 
+          unreadCount={unreadNoticesCount} 
+          unreadNotices={unreadNotices}
+          onBellClick={markAllNoticesAsRead}
+          onNoticeClick={async (id) => {
+            if (userProfile?.uid && id) {
+              await updateDoc(doc(db, 'notices', id), {
+                readBy: arrayUnion(userProfile.uid)
+              });
+              setNoticeToOpen(id);
+              setActiveView('notice');
+            } else if (id === '') {
+              setActiveView('notice');
+            }
+          }}
+        />
 
         {activeView === 'members' ? (
           <MembersView isManager={isManager} messId={userProfile?.messId} />
@@ -231,7 +273,7 @@ export default function DashboardPage() {
         ) : activeView === 'summary' ? (
           <SummaryView isManager={isManager} messId={userProfile?.messId} />
         ) : activeView === 'notice' ? (
-          <NoticeView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} />
+          <NoticeView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} openNoticeId={noticeToOpen} />
         ) : activeView === 'settings' ? (
           <SettingsView isManager={isManager} messId={userProfile?.messId} userProfile={userProfile} onLogout={handleLogout} />
         ) : (
