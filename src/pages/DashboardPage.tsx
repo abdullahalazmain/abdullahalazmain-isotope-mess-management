@@ -225,7 +225,7 @@ export default function DashboardPage() {
             fullMessStats={fullMessStats}
           />
         ) : activeView === 'bazar' ? (
-          <BazarView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} />
+          <BazarView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} messData={messData} members={allMembers} />
         ) : activeView === 'payments' ? (
           <PaymentsView isManager={isManager} messId={userProfile?.messId} userId={userProfile?.uid} userName={userProfile?.name} members={allMembers} />
         ) : activeView === 'summary' ? (

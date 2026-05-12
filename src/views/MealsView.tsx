@@ -5,13 +5,13 @@ import type { MealRecord, BazarRecord } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Utensils, ShoppingCart, Calculator, Calendar as CalendarIcon,
-  Plus, Check, X, AlertTriangle, Clock, Edit2, Minus, BellRing, MousePointer2, ChevronRight, ChevronLeft, Star, User, Wallet
+  Plus, Check, X, AlertTriangle, Clock, Edit2, Edit3, Minus, BellRing, MousePointer2, ChevronRight, ChevronLeft, Star, User, Wallet, UtensilsCrossed, Target, Coffee, Sun, Moon, PartyPopper
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-export default function MealsView({ 
-  isManager, messId, userId, userName, messData, members = [], financials, messFinancials, fullLedger = [], fullMessStats 
-}: { 
-  isManager?: boolean, messId?: string, userId?: string, userName?: string, messData?: any, members?: any[], financials?: any, messFinancials?: any, fullLedger?: any[], fullMessStats?: any 
+export default function MealsView({
+  isManager, messId, userId, userName, messData, members = [], financials, messFinancials, fullLedger = [], fullMessStats
+}: {
+  isManager?: boolean, messId?: string, userId?: string, userName?: string, messData?: any, members?: any[], financials?: any, messFinancials?: any, fullLedger?: any[], fullMessStats?: any
 }) {
   const [userMeals, setUserMeals] = useState<MealRecord[]>([]);
   const [allMessMeals, setAllMessMeals] = useState<MealRecord[]>([]);
@@ -25,6 +25,12 @@ export default function MealsView({
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
   const [managerViewType, setManagerViewType] = useState<'own' | 'mess'>('own');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+  const [tempMenu, setTempMenu] = useState('');
+  const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
+  const [timerHours, setTimerHours] = useState(1);
+  const [timerMinutes, setTimerMinutes] = useState(0);
 
   const viewType = isManager ? managerViewType : 'own';
 
@@ -35,6 +41,7 @@ export default function MealsView({
   const specialDays = messData?.specialDays || {};
   const isMarketDuty = assignedDuties[todayStr] === userId || assignedDuties[todayStr] === userName;
   const bazarTimers = messData?.bazarTimers || {};
+  const dailyMenu = messData?.dailyMenus?.[todayStr] || 'মেনু সেট করা হয়নি';
 
   // Helper to find member reliably by UID or Name
   const getMemberData = (idOrName: string) => {
@@ -55,7 +62,35 @@ export default function MealsView({
     );
 
     return () => { unsub1(); unsub2(); unsubBazar(); };
-  }, [messId, userId]);
+  }, [messId, userId, currentMonth]);
+
+  // Auto-lock bazaar when timer expires
+  useEffect(() => {
+    if (!messId) return;
+    const expectedTimeMs = bazarTimers[todayStr];
+    if (typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs) {
+      const updateLock = async () => {
+        try {
+          const messRef = doc(db, 'messes', messId);
+          await updateDoc(messRef, { [`bazarTimers.${todayStr}`]: 'DONE' });
+        } catch (e) { console.error(e); }
+      };
+      updateLock();
+    }
+  }, [messId, bazarTimers, todayStr]);
+
+  const snapshotCounts = useMemo(() => {
+    let m = 0, l = 0, d = 0;
+    allMessMeals.filter(r => r.date === todayStr).forEach(r => {
+      if (r.selfMeals?.morning) m += 1;
+      if (r.selfMeals?.lunch) l += 1;
+      if (r.selfMeals?.dinner) d += 1;
+      m += (r.guestMeals?.morning || 0);
+      l += (r.guestMeals?.lunch || 0);
+      d += (r.guestMeals?.dinner || 0);
+    });
+    return { m, l, d };
+  }, [allMessMeals, todayStr]);
 
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingUserName, setEditingUserName] = useState<string | null>(null);
@@ -76,7 +111,7 @@ export default function MealsView({
         const expectedTimeMs = bazarTimers[dateStr];
         const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
         const isBazarAssignedToMe = assignedDuties[dateStr] === userName;
-        
+
         let isDayLocked = false;
         if (isMonthLocked) isDayLocked = true;
         else if (isManager && (monthDiff === 0 || monthDiff === 1)) isDayLocked = false;
@@ -125,12 +160,36 @@ export default function MealsView({
   const today = todayDate.getDate();
   const realNow = todayDate;
   const isCurrentMonth = currentMonth === realNow.toISOString().substring(0, 7);
-  
+
   const monthDiff = (realNow.getFullYear() - yearNum) * 12 + ((realNow.getMonth() + 1) - monthNum);
   const clearedMonths: string[] = messData?.clearedMonths || [];
   const isMonthCleared = clearedMonths.includes(currentMonth);
-  // Month is locked if it's explicitly cleared OR it's more than 1 month old
-  const isMonthLocked = isMonthCleared || monthDiff > 1;
+  // Month is locked if it's explicitly cleared. 
+  // For non-managers, it's also locked if it's more than 1 month old.
+  const isMonthLocked = isMonthCleared || (!isManager && monthDiff > 1);
+
+  const handleSetTimer = async () => {
+    if (!messId) return;
+    try {
+      const targetTime = Date.now() + (timerHours * 60 * 60 * 1000) + (timerMinutes * 60 * 1000);
+      const messRef = doc(db, 'messes', messId);
+      await updateDoc(messRef, {
+        [`bazarTimers.${todayStr}`]: targetTime
+      });
+      setIsTimerModalOpen(false);
+    } catch (err) { console.error(err); }
+  };
+
+  const handleUpdateMenu = async () => {
+    if (!messId) return;
+    try {
+      const messRef = doc(db, 'messes', messId);
+      await updateDoc(messRef, {
+        [`dailyMenus.${todayStr}`]: tempMenu
+      });
+      setIsMenuModalOpen(false);
+    } catch (err) { console.error(err); }
+  };
   const handlePrevMonth = () => {
     let y = yearNum;
     let m = monthNum - 1;
@@ -181,6 +240,7 @@ export default function MealsView({
       const messRef = doc(db, 'messes', messId);
       const newCleared = [...clearedMonths, currentMonth];
       await updateDoc(messRef, { clearedMonths: newCleared });
+      setShowClearConfirm(false);
       alert(`${formatMonthYear(currentMonth)} এর হিসাব সফলভাবে ক্লিয়ার করা হয়েছে।`);
     } catch (error) {
       console.error('Error clearing month:', error);
@@ -236,34 +296,26 @@ export default function MealsView({
   };
 
   const toggleDaySelection = (day: number) => {
-    const isPastDay = day < today && monthDiff === 0;
-    if (isMonthLocked || monthDiff !== 0 || isPastDay) return;
+    if (isMonthLocked || monthDiff !== 0) return;
+    const isPastDay = monthDiff === 0 && day < today;
+    if (isPastDay) return; // Don't allow selecting past days in multi-select
+
     setSelectedDays(prev =>
       prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
     );
   };
 
   const handleMouseDown = (day: number) => {
-    if (!multiSelectMode || isMonthLocked || monthDiff !== 0) return;
-    const isPastDay = day < today && monthDiff === 0;
-    if (isPastDay && !isManager) return;
-
+    if (!multiSelectMode) return;
+    if (isMonthLocked || monthDiff !== 0 || (monthDiff === 0 && day < today)) return;
     setIsDragging(true);
-    setDragStartDay(day);
-    setSelectedDays([day]);
+    toggleDaySelection(day);
   };
 
   const handleMouseEnter = (day: number) => {
-    if (!isDragging || dragStartDay === null) return;
-    const isPastDay = day < today && monthDiff === 0;
-    if (isPastDay && !isManager) return;
-
-    const start = Math.min(dragStartDay, day);
-    const end = Math.max(dragStartDay, day);
-    const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
-    // For non-managers, filter out past days in the range
-    const filteredRange = isManager ? range : range.filter(d => d >= today);
-    setSelectedDays(filteredRange);
+    if (!isDragging) return;
+    if (isMonthLocked || monthDiff !== 0 || (monthDiff === 0 && day < today)) return;
+    toggleDaySelection(day);
   };
 
   const handleMouseUp = () => {
@@ -272,27 +324,19 @@ export default function MealsView({
   };
 
   const handleTouchStart = (day: number) => {
-    if (isMonthLocked || monthDiff !== 0) return;
-    const isPastDay = day < today && monthDiff === 0;
-    if (isPastDay && !isManager) return;
-
-    // Mobile: Long press (1s) to enter multi-select and start dragging
-    longPressTimer.current = setTimeout(() => {
-      setMultiSelectMode(true);
-      setIsDragging(true);
-      setDragStartDay(day);
-      setSelectedDays([day]);
-      if (navigator.vibrate) navigator.vibrate(50);
-    }, 1000);
+    if (!multiSelectMode) return;
+    if (isMonthLocked || monthDiff !== 0 || (monthDiff === 0 && day < today)) return;
+    setIsDragging(true);
+    toggleDaySelection(day);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging || dragStartDay === null) return;
-    
+
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
     const dayAttr = element?.closest('[data-day]')?.getAttribute('data-day');
-    
+
     if (dayAttr) {
       const day = parseInt(dayAttr);
       const isPastDay = day < today && monthDiff === 0;
@@ -380,7 +424,7 @@ export default function MealsView({
       mMeals += (m.guestMeals?.morning || 0);
       mMeals += (m.guestMeals?.lunch || 0);
       mMeals += (m.guestMeals?.dinner || 0);
-      
+
       messTotalM += mMeals;
       if (m.userId === userId) {
         ownTotalM += mMeals;
@@ -411,7 +455,7 @@ export default function MealsView({
         if (m.selfMeals.lunch) dm += 1;
         if (m.selfMeals.dinner) dm += 1;
         dm += (m.guestMeals?.morning || 0) + (m.guestMeals?.lunch || 0) + (m.guestMeals?.dinner || 0);
-        
+
         dayMeals += dm;
         if (m.userId === userId) ownDayMeals += dm;
       });
@@ -419,7 +463,7 @@ export default function MealsView({
       const dayMarket = bazarRecords
         .filter(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done'))
         .reduce((sum, r) => sum + r.totalAmount, 0);
-      
+
       const ownDayMarket = bazarRecords
         .filter(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done') && r.submittedBy === userId)
         .reduce((sum, r) => sum + r.totalAmount, 0);
@@ -461,10 +505,10 @@ export default function MealsView({
     const messNegativeBalance = currentMonthLedger.reduce((sum, member) => sum + (member.balance < 0 ? Math.abs(member.balance) : 0), 0);
     const ownMonthBalance = currentMonthLedger.find(m => m.uid === userId)?.balance || 0;
 
-    return { 
-      totalMeals: viewType === 'own' ? ownTotalM : messTotalM, 
-      totalMarket: viewType === 'own' ? ownTotalMar : messTotalMar, 
-      mealRate: rate, 
+    return {
+      totalMeals: viewType === 'own' ? ownTotalM : messTotalM,
+      totalMarket: viewType === 'own' ? ownTotalMar : messTotalMar,
+      mealRate: rate,
       chartData: messChartData,
       messPositiveBalance,
       messNegativeBalance,
@@ -548,7 +592,7 @@ export default function MealsView({
             <p className="text-sm font-semibold text-slate-500">ক্যালেন্ডার ও বাজার ট্র্যাকিং</p>
           </div>
         </div>
-        
+
         {isManager && (
           <div className="flex bg-white/70 backdrop-blur-md border border-slate-200 p-1 rounded-2xl shadow-sm">
             <button
@@ -574,7 +618,7 @@ export default function MealsView({
             <Utensils className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">সর্বমোট মিল ({bengaliMonths[monthNum-1]})</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">সর্বমোট মিল ({bengaliMonths[monthNum - 1]})</p>
             <h3 className="text-3xl font-black text-slate-900">{totalMeals}</h3>
           </div>
         </div>
@@ -583,7 +627,7 @@ export default function MealsView({
             <ShoppingCart className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">সর্বমোট বাজার</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">সর্বমোট বাজার</p>
             <h3 className="text-3xl font-black text-slate-900">৳ {totalMarket.toLocaleString()}</h3>
           </div>
         </div>
@@ -592,7 +636,7 @@ export default function MealsView({
             <Calculator className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">বর্তমান মিল রেট</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">বর্তমান মিল রেট</p>
             <h3 className="text-3xl font-black text-slate-900">৳ {mealRate.toFixed(2)}</h3>
           </div>
         </div>
@@ -624,7 +668,7 @@ export default function MealsView({
             const balanceAmount = ownMonthBalance;
             const isReceive = balanceAmount >= 0;
             const absBalance = Math.abs(Math.round(balanceAmount));
-            
+
             return (
               <div className={`${isReceive ? 'bg-emerald-500/90' : 'bg-rose-500/90'} backdrop-blur-md border ${isReceive ? 'border-emerald-400 shadow-emerald-200' : 'border-rose-400 shadow-rose-200'} shadow-xl rounded-3xl p-6 flex items-center gap-4 text-white transition-colors`}>
                 <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
@@ -644,28 +688,13 @@ export default function MealsView({
       {(() => {
         const expectedMs = bazarTimers[todayStr];
         const isBazarDone = bazarRecords.some(r => r.date.startsWith(todayStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedMs === 'DONE';
-        if (!isBazarDone && typeof expectedMs === 'number') {
-          const diffMs = expectedMs - Date.now();
-          if (diffMs > 0) {
-            const hrs = Math.ceil(diffMs / (1000 * 60 * 60));
-            return (
-              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-6 flex items-center justify-center gap-3 shadow-sm">
-                <AlertTriangle className="w-5 h-5 text-rose-500" />
-                <p className="text-rose-700 font-bold text-sm">
-                  আর {hrs} hr পর বাজার হয়ে যাবে। তারাতারি আপনার মিল সেট করুন।
-                </p>
-              </div>
-            );
-          } else {
-            return (
-              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-6 flex items-center justify-center gap-3 shadow-sm">
-                <AlertTriangle className="w-5 h-5 text-rose-500" />
-                <p className="text-rose-700 font-bold text-sm">
-                  বাজার করার সময় শেষ হয়ে গেছে। এখন আর মিল পরিবর্তন করা সম্ভব নয়।
-                </p>
-              </div>
-            );
-          }
+        
+        // Only show if no timer is actively being displayed in the snapshot section
+        const hasActiveTimer = !isBazarDone && typeof expectedMs === 'number';
+
+        if (!isBazarDone && typeof expectedMs === 'number' && !isMarketDuty && false) { // Set to false to hide if redundancy is unwanted
+           // This block is now effectively disabled because we show the timer in the snapshot
+           return null;
         }
         return null;
       })()}
@@ -699,11 +728,11 @@ export default function MealsView({
                 <div className="flex flex-col gap-3">
                   <p className="text-sm font-bold text-slate-700 text-center">কখন বাজার করবে?</p>
                   <div className="flex gap-2 items-center justify-center">
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="24" 
-                      value={bazarHrInput} 
+                    <input
+                      type="number"
+                      min="1"
+                      max="24"
+                      value={bazarHrInput}
                       onChange={(e) => setBazarHrInput(e.target.value)}
                       className="w-16 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-center focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-800"
                     />
@@ -718,25 +747,78 @@ export default function MealsView({
       })()}
 
       {/* Month Clear Banner (Only for Manager, only for Last Month if not cleared) */}
-      {isManager && monthDiff === 1 && !isMonthCleared && (
+      {isManager && monthDiff >= 1 && !isMonthCleared && (
         <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-100 rounded-3xl p-6 shadow-md mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center shrink-0">
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-lg">হিসাব ক্লিয়ার হয়েছে?</h3>
-              <p className="text-sm font-semibold text-slate-500">{formatMonthYear(currentMonth)} মাসের হিসাব সম্পন্ন হলে ক্লিয়ার করুন। ক্লিয়ার করলে এই মাসের কোনো তথ্য কেউ আর এডিট করতে পারবে না।</p>
+              <h3 className="font-bold text-slate-800 text-lg">
+                এ মাসের হিসাব কি শেষ হয়েছে?
+              </h3>
+              <p className="text-sm font-semibold text-slate-500">
+                {formatMonthYear(currentMonth)} মাসের হিসাব সম্পন্ন হলে ক্লিয়ার করুন।
+              </p>
             </div>
           </div>
 
           <div className="flex gap-3 shrink-0">
-            <button onClick={handleClearMonth} className="px-6 py-3 bg-rose-500 text-white rounded-xl text-sm font-bold hover:bg-rose-600 transition-colors shadow-sm">
-              হ্যাঁ, ক্লিয়ার আছে
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              className="px-6 py-3 bg-rose-500 text-white rounded-xl text-sm font-bold hover:bg-rose-600 transition-colors shadow-sm"
+            >
+              হ্যাঁ, হয়েছে
             </button>
           </div>
         </div>
       )}
+
+      {/* FULL SCREEN MONTH CLEAR CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowClearConfirm(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-rose-500 to-orange-500" />
+              <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mb-6 mx-auto shadow-sm">
+                <AlertTriangle className="w-10 h-10" />
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-800 text-center mb-4">আপনি কি নিশ্চিত?</h3>
+              <p className="text-sm font-bold text-slate-500 text-center mb-8 leading-relaxed">
+                {formatMonthYear(currentMonth)} মাসের হিসাব কনফার্ম হয়ে গেলে পরবর্তীতে এডিট করার আর কোনো সুযোগ থাকবে না। আপনি কি সত্যিই মাসটি ক্লিয়ার করতে চান?
+              </p>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleClearMonth}
+                  className="w-full py-4 bg-rose-500 text-white rounded-2xl font-black shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all transform active:scale-95"
+                >
+                  হ্যাঁ, কনফার্ম করুন
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:bg-slate-100 transition-all"
+                >
+                  ক্যানসেল
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content Grid: Calendar + Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -800,12 +882,14 @@ export default function MealsView({
                 <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-[#6366f1] transition-all"><ChevronRight className="w-5 h-5" /></button>
               </div>
             </div>
-            <button
-              onClick={() => { setMultiSelectMode(!multiSelectMode); setSelectedDays([]); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${multiSelectMode ? 'bg-[#6366f1] text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-            >
-              <MousePointer2 className="w-4 h-4" /> {multiSelectMode ? 'ক্যানসেল সিলেকশন' : 'মাল্টিপল এডিট'}
-            </button>
+            {!isMonthCleared && (
+              <button
+                onClick={() => { setMultiSelectMode(!multiSelectMode); setSelectedDays([]); }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${multiSelectMode ? 'bg-[#6366f1] text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              >
+                <MousePointer2 className="w-4 h-4" /> {multiSelectMode ? 'ক্যানসেল সিলেকশন' : 'মাল্টিপল এডিট'}
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-7 gap-2 md:gap-3 mb-4">
@@ -817,7 +901,7 @@ export default function MealsView({
               const isSelected = selectedDays.includes(d);
               const dateStr = `${currentMonth}-${d.toString().padStart(2, '0')}`;
               const isSpecial = specialDays[dateStr];
-              
+
               const meal = userMeals.find(m => m.date === dateStr);
               let count = 0;
               let hasMeal = false;
@@ -847,9 +931,35 @@ export default function MealsView({
                   onTouchEnd={handleTouchEnd}
                   className={`
                     aspect-square rounded-2xl transition-all cursor-pointer relative overflow-hidden group border
-                    ${isSelected ? 'bg-indigo-600 border-indigo-700 shadow-lg' : isToday ? 'bg-indigo-50 border-[#6366f1]' : 'bg-slate-50 border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30'}
+                    ${isSelected ? 'bg-indigo-600 border-indigo-700 shadow-lg' : isToday ? 'bg-indigo-50 border-[#6366f1]' : isSpecial ? 'bg-amber-400/10 border-amber-400 shadow-[0_0_15px_-3px_rgba(251,191,36,0.5)]' : 'bg-slate-50 border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30'}
                   `}
                 >
+                  {isSpecial && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{
+                        opacity: [0.3, 0.6, 0.3],
+                        scale: [1, 1.05, 1],
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                      className="absolute inset-0 bg-amber-400/20 z-0"
+                    >
+                      <motion.div
+                        animate={{
+                          y: [0, -5, 0],
+                          rotate: [0, 10, -10, 0],
+                        }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                        className="absolute bottom-1 left-1 opacity-60"
+                      >
+                        <PartyPopper className="w-5 h-5 text-amber-500" />
+                      </motion.div>
+                    </motion.div>
+                  )}
                   {/* Date in top left */}
                   <div className={`absolute top-2 left-3 text-[13px] font-black z-20 ${isSelected ? 'text-white/80' : isPastDay ? 'text-[#94a3b8]' : 'text-slate-900'}`}>
                     {d}
@@ -863,7 +973,6 @@ export default function MealsView({
                   </div>
 
                   {isSelected && <div className="absolute inset-0 bg-white/10 z-0"></div>}
-                  {isSpecial && <div className={`absolute bottom-1.5 w-full text-center text-[7px] font-black uppercase tracking-widest px-1 truncate z-20 ${isSelected ? 'text-white/70' : 'text-amber-600'}`}>{isSpecial}</div>}
                 </div>
               );
             })}
@@ -879,75 +988,150 @@ export default function MealsView({
           </AnimatePresence>
         </div>
 
-        {/* Assignment Section */}
-        <div className="lg:col-span-5 h-full">
-          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6 flex flex-col h-full overflow-hidden">
-            <h3 className="font-bold text-slate-800 text-lg mb-6 flex items-center gap-3">
-              <ShoppingCart className="w-5 h-5 text-indigo-500" /> বাজারের দিন
-            </h3>
-            <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
-              {Object.entries(assignedDuties).filter(([dateStr]) => dateStr.startsWith(currentMonth)).length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full opacity-40">
-                  <ShoppingCart className="w-10 h-10 mb-2" />
-                  <p className="text-sm font-bold">কোনো ডিউটি অ্যাসাইন করা হয়নি</p>
-                </div>
-              )}
+        {/* Today's Insights Section (Snapshot & Menu) */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
+
+          {/* TODAY'S SNAPSHOT */}
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2.5rem] p-6 overflow-hidden relative group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50" />
+
+            <div className="flex items-center justify-between mb-6 relative">
+              <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                <Target className="w-5 h-5 text-[#6366f1]" /> আজকের স্ন্যাপশট
+              </h3>
+            </div>
+
+            {/* Shopper Info */}
+            <div className="flex items-center justify-between mb-8 bg-slate-50/50 p-5 rounded-[2rem] border border-slate-100 shadow-inner group-hover:bg-slate-100/50 transition-colors">
               {(() => {
-                const colors = [
-                  'bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100', 
-                  'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100', 
-                  'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100', 
-                  'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100', 
-                  'bg-purple-50 border-purple-100 text-purple-700 hover:bg-purple-100', 
-                  'bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100',
-                  'bg-orange-50 border-orange-100 text-orange-700 hover:bg-orange-100',
-                  'bg-teal-50 border-teal-100 text-teal-700 hover:bg-teal-100'
-                ];
-                const nameToColorMap: { [key: string]: string } = {};
-                let colorIdx = 0;
+                const dutyUid = assignedDuties[todayStr];
+                const dutyMember = getMemberData(dutyUid);
+                const expectedMs = bazarTimers[todayStr];
+                const isBazarDone = bazarRecords.some(r => r.date.startsWith(todayStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedMs === 'DONE';
+                const [snapTimeLeft, setSnapTimeLeft] = useState('');
 
-                const duties = Object.entries(assignedDuties)
-                  .filter(([dateStr]) => dateStr.startsWith(currentMonth))
-                  .sort();
+                useEffect(() => {
+                  if (!isBazarDone && typeof expectedMs === 'number') {
+                    const timer = setInterval(() => {
+                      const diff = expectedMs - Date.now();
+                      if (diff <= 0) {
+                        setSnapTimeLeft('সময় শেষ!');
+                        clearInterval(timer);
+                      } else {
+                        const h = Math.floor(diff / (1000 * 60 * 60));
+                        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((diff % (1000 * 60)) / 1000);
+                        setSnapTimeLeft(`${h}h ${m}m ${s}s`);
+                      }
+                    }, 1000);
+                    return () => clearInterval(timer);
+                  }
+                }, [expectedMs, isBazarDone]);
 
-                if (duties.length === 0) return null;
-
-                return duties.map(([dateStr, member]) => {
-                    const dayNum = parseInt(dateStr.split('-')[2]) || 0;
-                    const memberIdOrName = String(member);
-                    const memberObj = getMemberData(memberIdOrName);
-                    const displayName = memberObj?.name || memberIdOrName;
-                    
-                    if (!nameToColorMap[displayName]) {
-                      nameToColorMap[displayName] = colors[colorIdx % colors.length];
-                      colorIdx++;
-                    }
-                    return (
-                      <div key={dateStr} className={`flex justify-between items-center p-3 rounded-2xl border shadow-sm transition-all hover:shadow-md cursor-pointer ${nameToColorMap[displayName]}`}>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-white/60 rounded-xl flex items-center justify-center font-black text-sm shadow-sm">
-                            {dayNum}
+                return (
+                  <>
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        {dutyMember?.photoURL ? (
+                          <img src={dutyMember.photoURL} alt={dutyMember.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-md group-hover:scale-105 transition-transform" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-500 border-2 border-white shadow-md">
+                            <User className="w-8 h-8" />
                           </div>
-                          <div className="flex items-center gap-2">
-                            {memberObj?.photoURL ? (
-                              <img src={memberObj.photoURL} alt={displayName} className="w-7 h-7 rounded-full object-cover border border-white/40" />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-white/40 flex items-center justify-center">
-                                <User className="w-4 h-4" />
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">বাজার ডিউটি</p>
-                              <h4 className="text-sm font-black truncate max-w-[120px]">{displayName}</h4>
-                            </div>
-                          </div>
+                        )}
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center text-white shadow-sm border-2 border-white">
+                          <ShoppingCart className="w-3.5 h-3.5" />
                         </div>
-                        <CalendarIcon className="w-4 h-4 opacity-40" />
                       </div>
-                    );
-                });
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">আজকের বাজারকারী</p>
+                        <h4 className="text-lg font-black text-slate-800 leading-none">{dutyMember?.name || 'অ্যাসাইন করা হয়নি'}</h4>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2">
+                      {isBazarDone ? (
+                        <div className="bg-emerald-500 text-white px-5 py-3 rounded-2xl shadow-lg shadow-emerald-100 flex flex-col items-center min-w-[120px]">
+                          <span className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-0.5">স্ট্যাটাস</span>
+                          <span className="text-sm font-black">বাজার সম্পন্ন</span>
+                        </div>
+                      ) : typeof expectedMs === 'number' ? (
+                        <motion.div 
+                          animate={{ 
+                            boxShadow: [
+                              "0 0 0px rgba(249, 115, 22, 0)",
+                              "0 0 20px rgba(249, 115, 22, 0.4)",
+                              "0 0 0px rgba(249, 115, 22, 0)"
+                            ],
+                            scale: [1, 1.02, 1]
+                          }}
+                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                          className="bg-gradient-to-br from-orange-500 to-rose-500 text-white px-5 py-3 rounded-2xl shadow-lg flex flex-col items-center min-w-[120px] relative overflow-hidden"
+                        >
+                          <motion.div 
+                            animate={{ x: ["-100%", "200%"] }}
+                            transition={{ duration: 2.5, repeat: Infinity, ease: "linear", repeatDelay: 1 }}
+                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"
+                          />
+                          <span className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-0.5 relative z-10 text-center leading-tight">বাজার করতে আর মাত্র</span>
+                          <span className="text-sm font-black tabular-nums relative z-10">{snapTimeLeft}</span>
+                          <span className="text-[9px] font-black uppercase tracking-tighter opacity-70 relative z-10 mt-0.5">বাকি</span>
+                        </motion.div>
+                      ) : (
+                        <div className="bg-slate-200 text-slate-500 px-5 py-3 rounded-2xl flex flex-col items-center min-w-[120px]">
+                          <span className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-0.5">স্ট্যাটাস</span>
+                          <span className="text-sm font-black">বাজার হয়নি</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
               })()}
             </div>
+
+            {/* Live Counts */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-indigo-50/50 rounded-2xl p-3 border border-indigo-100 flex flex-col items-center gap-1 group-hover:bg-indigo-50 transition-colors">
+                <Coffee className="w-4 h-4 text-indigo-500" />
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">সকাল</p>
+                <span className="text-lg font-black text-indigo-600">{snapshotCounts.m}</span>
+              </div>
+              <div className="bg-orange-50/50 rounded-2xl p-3 border border-orange-100 flex flex-col items-center gap-1 group-hover:bg-orange-50 transition-colors">
+                <Sun className="w-4 h-4 text-orange-500" />
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">দুপুর</p>
+                <span className="text-lg font-black text-orange-600">{snapshotCounts.l}</span>
+              </div>
+              <div className="bg-slate-900 rounded-2xl p-3 border border-slate-800 flex flex-col items-center gap-1 group-hover:bg-slate-800 transition-colors shadow-lg">
+                <Moon className="w-4 h-4 text-indigo-300" />
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">রাত</p>
+                <span className="text-lg font-black text-white">{snapshotCounts.d}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* TODAY'S MENU */}
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2.5rem] p-6 relative overflow-hidden group min-h-[180px] flex flex-col">
+            <div className="flex items-center justify-between mb-4 relative">
+              <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                <UtensilsCrossed className="w-5 h-5 text-emerald-500" /> আজকের মেনু
+              </h3>
+              {(isManager || isMarketDuty) && !isMonthCleared && (
+                <button
+                  onClick={() => { setTempMenu(dailyMenu); setIsMenuModalOpen(true); }}
+                  className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 bg-emerald-50/30 rounded-3xl p-5 border border-emerald-100/50 relative">
+              <div className="absolute top-4 left-4 opacity-10"><Utensils className="w-12 h-12 text-emerald-600" /></div>
+              <p className="text-base font-black text-slate-700 relative z-10 leading-relaxed italic">
+                "{dailyMenu}"
+              </p>
+            </div>
+
           </div>
         </div>
 
@@ -1048,22 +1232,22 @@ export default function MealsView({
 
                     {/* Duty Bar */}
                     {duty ? (
-                        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-emerald-200/50 mt-1">
-                          <div className="flex items-center gap-3">
-                            <ShoppingCart className="w-5 h-5 text-white/80" />
-                            <div>
-                              <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider leading-none mb-1">আজকে বাজার করবেন</p>
-                              <p className="text-white font-black text-sm leading-none">{dutyName}</p>
-                            </div>
+                      <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-emerald-200/50 mt-1">
+                        <div className="flex items-center gap-3">
+                          <ShoppingCart className="w-5 h-5 text-white/80" />
+                          <div>
+                            <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider leading-none mb-1">আজকে বাজার করবেন</p>
+                            <p className="text-white font-black text-sm leading-none">{dutyName}</p>
                           </div>
-                          {dutyMember?.photoURL ? (
-                            <img src={dutyMember.photoURL} alt={String(duty)} className="w-8 h-8 rounded-full border-2 border-white/40 shadow-sm object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center">
-                              <User className="w-4 h-4 text-white" />
-                            </div>
-                          )}
                         </div>
+                        {dutyMember?.photoURL ? (
+                          <img src={dutyMember.photoURL} alt={String(duty)} className="w-8 h-8 rounded-full border-2 border-white/40 shadow-sm object-cover" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center">
+                            <User className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-center justify-center mt-1">
                         <p className="text-slate-400 font-bold text-xs flex items-center gap-2">
@@ -1081,21 +1265,43 @@ export default function MealsView({
                   const dateStr = `${currentMonth}-${day.toString().padStart(2, '0')}`;
                   const expectedTimeMs = bazarTimers[dateStr];
                   const isBazarDone = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedTimeMs === 'DONE';
-                  
-                  const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
-                  
+
                   // Comprehensive lock logic for the current user
-                  const isPastDayForMember = !isManager && !isBazarAssignedToMe && monthDiff === 0 && day < today;
-                  const hasTimeCrossed = !isManager && !isBazarAssignedToMe && typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
-                  const isWrongMonthForMember = !isManager && !isBazarAssignedToMe && monthDiff !== 0;
+                  const isPastDay = monthDiff > 0 || (monthDiff === 0 && day < today);
+                  const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
 
-                  const isEffectivelyLocked = isMonthLocked || isBazarDone || isPastDayForMember || hasTimeCrossed || isWrongMonthForMember;
+                  // Role based locks:
+                  // 1. Manager: Only locked if month is cleared/confirmed
+                  // 2. Bazaar Person: Locked if it's a past day. On current/future: can edit everyone on their duty day.
+                  // 3. Normal Member: Locked if past day OR bazaar done OR time crossed. Can only edit self.
 
-                  if (isEffectivelyLocked) return (
-                    <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center gap-1 text-center">
-                      <Clock className="w-5 h-5 text-slate-400" />
-                      <p className="text-xs font-bold text-slate-500">এই দিনের হিসাব লক করা হয়েছে</p>
-                      <p className="text-[10px] text-slate-400 mt-1">কোনো সমস্যা থাকলে ম্যানেজারের সাথে যোগাযোগ করুন।</p>
+                  let isEffectivelyLocked = false;
+                  if (isMonthLocked) {
+                    isEffectivelyLocked = true;
+                  } else if (!isManager) {
+                    if (isPastDay) {
+                      isEffectivelyLocked = true; // Bazaar person and member can't edit past
+                    } else if (!isBazarAssignedToMe) {
+                      // Normal member checks
+                      const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
+                      if (isBazarDone || hasTimeCrossed || monthDiff !== 0) {
+                        isEffectivelyLocked = true;
+                      }
+                    }
+                  }
+
+                  if (isEffectivelyLocked && !isMonthCleared) return (
+                    <div className="px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl flex flex-col items-center justify-center gap-1 text-center">
+                      <Clock className="w-5 h-5 text-rose-500" />
+                      <p className="text-xs font-bold text-rose-600">এই দিনের হিসাব লক করা হয়েছে</p>
+                      <p className="text-[10px] text-rose-400 mt-1">কোনো সমস্যা থাকলে ম্যানেজারের সাথে যোগাযোগ করুন।</p>
+                    </div>
+                  );
+
+                  if (isMonthCleared) return (
+                    <div className="px-4 py-8 flex flex-col items-center justify-center opacity-40 text-center">
+                      <Clock className="w-8 h-8 mb-2" />
+                      <p className="text-sm font-black">হিসাব সম্পন্ন হয়েছে</p>
                     </div>
                   );
 
@@ -1112,11 +1318,11 @@ export default function MealsView({
                       >
                         <Utensils className="w-5 h-5" /> নিজের মিল সেট করুন
                       </button>
-                      
+
                       {(() => {
                         const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
-                        
-                        if (isManager || isBazarAssignedToMe) {
+
+                        if (isManager) {
                           return (
                             <>
                               <button
@@ -1157,76 +1363,90 @@ export default function MealsView({
                 })()}
               </div>
 
-              {/* Day Overview Member List */}
               {(() => {
-                const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
+                const day = managerActionDay as number;
+                const dateStr = `${currentMonth}-${day.toString().padStart(2, '0')}`;
+                const isPastDay = monthDiff > 0 || (monthDiff === 0 && day < today);
                 const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
-                const canEditOthers = isManager || isBazarAssignedToMe;
-                
+
+                // Can edit others if Manager OR (Bazaar person on their duty day AND not past day)
+                const canEditOthers = (isManager || (isBazarAssignedToMe && !isPastDay)) && !isMonthCleared;
+
                 if (!canEditOthers) return null;
 
                 return (
                   <div className="px-5 pb-5">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">এই দিনের মিলের তালিকা</h4>
-                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-1.5 max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
-                      {members.map(member => {
-                    const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
-                    const memberMeal = allMessMeals.find(m => m.userId === member.uid && m.date === dateStr);
-                    let memberTotal = 0;
-                    if (memberMeal) {
-                      if (memberMeal.selfMeals?.morning) memberTotal += 1;
-                      if (memberMeal.selfMeals?.lunch) memberTotal += 1;
-                      if (memberMeal.selfMeals?.dinner) memberTotal += 1;
-                      memberTotal += (memberMeal.guestMeals?.morning || 0);
-                      memberTotal += (memberMeal.guestMeals?.lunch || 0);
-                      memberTotal += (memberMeal.guestMeals?.dinner || 0);
-                    }
-                    const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
-                    const canEditOthers = isManager || isBazarAssignedToMe;
-                    
-                    return (
-                      <div 
-                        key={member.uid} 
-                        onClick={() => {
-                          if (!canEditOthers && member.uid !== userId) return;
-                          
-                          if (!canEditOthers && member.uid === userId) {
-                            if (monthDiff !== 0) { alert('আপনি শুধু চলতি মাসের মিল এডিট করতে পারবেন।'); return; }
-                            const day = managerActionDay as number;
-                            if (day < today && monthDiff === 0) { alert('অতীতের মিল এডিট করার সময় শেষ।'); return; }
-                            const expectedTimeMs = bazarTimers[dateStr];
-                            const isBazarDone = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedTimeMs === 'DONE';
-                            const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
-                            if (isBazarDone || hasTimeCrossed) { alert(`মে ${day} তারিখের বাজার সম্পন্ন হয়েছে বা সময় শেষ। মিল পরিবর্তন করা সম্ভব নয়।`); return; }
-                          }
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">অন্যান্য সদস্যের মিল সেট বা পরিবর্তন করুন</h4>
+                    <div className="flex flex-col gap-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                      {members.filter(m => m.uid !== userId).map(member => {
+                        const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
+                        const memberMeal = allMessMeals.find(m => m.userId === member.uid && m.date === dateStr);
+                        let memberTotal = 0;
+                        if (memberMeal) {
+                          if (memberMeal.selfMeals?.morning) memberTotal += 1;
+                          if (memberMeal.selfMeals?.lunch) memberTotal += 1;
+                          if (memberMeal.selfMeals?.dinner) memberTotal += 1;
+                          memberTotal += (memberMeal.guestMeals?.morning || 0);
+                          memberTotal += (memberMeal.guestMeals?.lunch || 0);
+                          memberTotal += (memberMeal.guestMeals?.dinner || 0);
+                        }
 
-                          setEditingUserId(member.uid);
-                          setEditingUserName(member.name);
-                          setEditingDays([managerActionDay as number]);
-                          resetMealState([managerActionDay as number], member.uid);
-                          setIsModalOpen(true);
-                          setManagerActionDay(null);
-                        }}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${canEditOthers || member.uid === userId ? 'hover:bg-[#6366f1]/10 cursor-pointer group' : ''}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {member.photoURL ? (
-                            <img src={member.photoURL} alt={member.name} className="w-6 h-6 rounded-full object-cover border border-slate-200" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center">
-                              <User className="w-3 h-3 text-slate-500" />
+                        return (
+                          <div
+                            key={member.uid}
+                            onClick={() => {
+                              if (isMonthCleared) { alert('মাসটি ক্লোজ করা হয়েছে, এখন আর পরিবর্তন সম্ভব নয়।'); return; }
+                              if (!canEditOthers && member.uid !== userId) return;
+
+                              if (!canEditOthers && member.uid === userId) {
+                                if (monthDiff !== 0) { alert('আপনি শুধু চলতি মাসের মিল এডিট করতে পারবেন।'); return; }
+                                const day = managerActionDay as number;
+                                const isPastDay = monthDiff > 0 || (monthDiff === 0 && day < today);
+                                if (isPastDay) { alert('অতীতের মিল এডিট করার সময় শেষ।'); return; }
+                                const expectedTimeMs = bazarTimers[dateStr];
+                                const isBazarDone = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedTimeMs === 'DONE';
+                                const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
+                                if (isBazarDone || hasTimeCrossed) { alert(`মে ${day} তারিখের বাজার সম্পন্ন হয়েছে বা সময় শেষ। মিল পরিবর্তন করা সম্ভব নয়।`); return; }
+                              }
+
+                              setEditingUserId(member.uid);
+                              setEditingUserName(member.name);
+                              setEditingDays([managerActionDay as number]);
+                              resetMealState([managerActionDay as number], member.uid);
+                              setIsModalOpen(true);
+                              setManagerActionDay(null);
+                            }}
+                            className={`flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm transition-all hover:border-[#6366f1]/30 hover:shadow-md ${canEditOthers || member.uid === userId ? 'cursor-pointer group' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                {member.photoURL ? (
+                                  <img src={member.photoURL} alt={member.name} className="w-8 h-8 rounded-full object-cover border border-slate-100" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+                                    <User className="w-4 h-4 text-slate-400" />
+                                  </div>
+                                )}
+                                <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${memberTotal > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-slate-700 group-hover:text-[#6366f1] transition-colors">{member.name}</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">মেম্বার আইডি: {member.uid?.substring(0, 6)}</p>
+                              </div>
                             </div>
-                          )}
-                          <span className="text-xs font-bold text-slate-700 group-hover:text-[#6366f1] transition-colors">{member.name}</span>
-                        </div>
-                        <span className={`text-sm font-black transition-colors ${memberTotal > 0 ? 'text-[#6366f1]' : 'text-slate-400 group-hover:text-[#6366f1]/50'}`}>{memberTotal > 0 ? memberTotal : '—'}</span>
-                      </div>
-                      );
-                    })}
+                            <div className="flex items-center gap-2">
+                              <span className={`text-base font-black transition-colors ${memberTotal > 0 ? 'text-[#6366f1]' : 'text-slate-300 group-hover:text-[#6366f1]/40'}`}>
+                                {memberTotal > 0 ? memberTotal : '—'}
+                              </span>
+                              <ChevronRight className="w-4 h-4 text-slate-200 group-hover:text-[#6366f1]/30 transition-colors" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
             </motion.div>
           </div>
         )}
@@ -1437,6 +1657,74 @@ export default function MealsView({
                     <button onClick={() => handleSaveMeals(userName)} className="flex-1 py-4 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-xl flex items-center justify-center gap-2"><Check className="w-4 h-4" /> প্রসিড ও সেভ করুন</button>
                   </>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* EDIT MENU MODAL */}
+      <AnimatePresence>
+        {isMenuModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMenuModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500" />
+              <h3 className="text-xl font-black text-slate-800 mb-2">আজকের মেনু আপডেট করুন</h3>
+              <p className="text-xs font-bold text-slate-400 mb-6 uppercase tracking-wider">মেম্বারদের জন্য আজকের খাবারের তালিকা লিখুন</p>
+
+              <textarea
+                value={tempMenu} onChange={e => setTempMenu(e.target.value)}
+                placeholder="যেমন: মুরগির মাংস, ডাল, আলু ভর্তা..."
+                className="w-full h-32 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-inner resize-none"
+              />
+
+              <div className="flex gap-3 mt-8">
+                <button onClick={() => setIsMenuModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold">বাতিল</button>
+                <button onClick={handleUpdateMenu} className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg shadow-emerald-200">আপডেট করুন</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SET BAZAR TIMER MODAL */}
+      <AnimatePresence>
+        {isTimerModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsTimerModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl overflow-hidden text-center">
+              <div className="absolute top-0 left-0 w-full h-2 bg-rose-500" />
+              <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mb-6 mx-auto"><Clock className="w-8 h-8" /></div>
+              <h3 className="text-xl font-black text-slate-800 mb-2">টাইমার সেট করুন</h3>
+              <p className="text-xs font-bold text-slate-400 mb-8 uppercase tracking-wider">কতক্ষণ পর বাজারে যাবেন?</p>
+
+              <div className="flex flex-col gap-4 mb-8">
+                <div className="flex items-center justify-center gap-4">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setTimerHours(Math.max(0, timerHours - 1))} className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black text-lg">-</button>
+                      <div className="text-3xl font-black text-slate-800 w-12">{timerHours}</div>
+                      <button onClick={() => setTimerHours(Math.min(24, timerHours + 1))} className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black text-lg">+</button>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ঘন্টা</span>
+                  </div>
+
+                  <div className="text-2xl font-black text-slate-300 mb-6">:</div>
+
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setTimerMinutes(Math.max(0, timerMinutes - 5))} className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black text-lg">-</button>
+                      <div className="text-3xl font-black text-slate-800 w-12">{timerMinutes.toString().padStart(2, '0')}</div>
+                      <button onClick={() => setTimerMinutes(Math.min(55, timerMinutes + 5))} className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black text-lg">+</button>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">মিনিট</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setIsTimerModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold">বাতিল</button>
+                <button onClick={handleSetTimer} className="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-black shadow-lg shadow-rose-200">টাইমার শুরু</button>
               </div>
             </motion.div>
           </div>

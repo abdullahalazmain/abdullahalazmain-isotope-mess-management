@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingCart, Calendar as CalendarIcon, TrendingUp, Trophy, AlertCircle, 
-  Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3
+  Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3, User
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar } from '../services/bazarService';
@@ -33,12 +33,13 @@ const initialRecords: BazarRecord[] = [
   }
 ];
 
-export default function BazarView({ isManager, messId, userId, userName, messData }: { 
+export default function BazarView({ isManager, messId, userId, userName, messData, members = [] }: { 
   isManager?: boolean, 
   messId?: string, 
   userId?: string, 
   userName?: string,
-  messData?: any
+  messData?: any,
+  members?: any[]
 }) {
   const [isMarketDuty, setIsMarketDuty] = useState(true); 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -139,6 +140,9 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
     }
     return null;
   };
+
+  const getMemberData = (id: string) => members.find((m: any) => m.id === id || m.uid === id || m.name === id);
+  const assignedDuties = messData?.assignedDuties || {};
 
   return (
     <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
@@ -300,32 +304,75 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
         </div>
       </div>
 
-      {isManager && (
-         <div className="mb-8">
-           <h2 className="text-lg font-black text-slate-800 mb-4">বাজারের ডিউটি ও নোটিশ</h2>
-           <div className="bg-white/70 backdrop-blur-md shadow-lg border border-slate-100 rounded-3xl p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { date: 'May 14', member: 'Karim Hasan', missed: true },
-                { date: 'May 15', member: 'James Doe', missed: false }
-              ].map(duty => (
-                 <div key={duty.date} className={`flex justify-between items-center p-4 rounded-2xl border ${duty.missed ? 'bg-rose-50 border-rose-100' : 'bg-slate-50 border-slate-100'}`}>
-                   <div>
-                     <p className="text-xs font-bold text-slate-500">{duty.date}</p>
-                     <p className="text-sm font-black text-slate-800">{duty.member}</p>
-                   </div>
-                   {duty.missed && (
-                     <button 
-                       onClick={() => { setNoticeMember(duty.member); setNoticeDate(duty.date); setIsNoticeModalOpen(true); }}
-                       className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center text-rose-500 hover:bg-rose-500 hover:text-white transition-colors"
-                     >
-                       <Bell className="w-4 h-4" />
-                     </button>
-                   )}
-                 </div>
-              ))}
-           </div>
-         </div>
-      )}
+      <div className="mb-8">
+        <h2 className="text-lg font-black text-slate-800 mb-4">বাজারের ডিউটি ও নোটিশ</h2>
+        <div className="bg-white/70 backdrop-blur-md shadow-lg border border-slate-100 rounded-3xl p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(() => {
+              const colors = [
+                'bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100', 
+                'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100', 
+                'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100', 
+                'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100', 
+                'bg-purple-50 border-purple-100 text-purple-700 hover:bg-purple-100', 
+                'bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100',
+                'bg-orange-50 border-orange-100 text-orange-700 hover:bg-orange-100',
+                'bg-teal-50 border-teal-100 text-teal-700 hover:bg-teal-100'
+              ];
+              const nameToColorMap: { [key: string]: string } = {};
+              let colorIdx = 0;
+
+              const duties = Object.entries(assignedDuties)
+                .filter(([dateStr]) => dateStr.startsWith(currentMonth))
+                .sort();
+
+              if (duties.length === 0) {
+                return (
+                  <div className="col-span-full py-12 flex flex-col items-center justify-center opacity-30 text-center">
+                    <ShoppingCart className="w-12 h-12 mb-3" />
+                    <p className="text-sm font-black">এ মাসের কোনো ডিউটি অ্যাসাইন করা হয়নি</p>
+                  </div>
+                );
+              }
+
+              return duties.map(([dateStr, member]) => {
+                  const dayNum = parseInt(dateStr.split('-')[2]) || 0;
+                  const memberIdOrName = String(member);
+                  const memberObj = getMemberData(memberIdOrName);
+                  const displayName = memberObj?.name || memberIdOrName;
+                  
+                  if (!nameToColorMap[displayName]) {
+                    nameToColorMap[displayName] = colors[colorIdx % colors.length];
+                    colorIdx++;
+                  }
+                  return (
+                    <div key={dateStr} className={`flex justify-between items-center p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md cursor-pointer ${nameToColorMap[displayName]}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/60 rounded-xl flex items-center justify-center font-black text-sm shadow-sm">
+                          {dayNum}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {memberObj?.photoURL ? (
+                            <img src={memberObj.photoURL} alt={displayName} className="w-8 h-8 rounded-full object-cover border border-white/40" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center">
+                              <User className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">বাজার ডিউটি</p>
+                            <h4 className="text-sm font-black truncate max-w-[100px]">{displayName}</h4>
+                          </div>
+                        </div>
+                      </div>
+                      <CalendarIcon className="w-4 h-4 opacity-40" />
+                    </div>
+                  );
+              });
+            })()}
+          </div>
+        </div>
+      </div>
 
       {/* List Section: Bazar Records */}
       <h2 className="text-lg font-black text-slate-800 mb-4">বাজারের হিস্ট্রি</h2>
