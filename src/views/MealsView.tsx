@@ -1158,10 +1158,18 @@ export default function MealsView({
               </div>
 
               {/* Day Overview Member List */}
-              <div className="px-5 pb-5">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">এই দিনের মিলের তালিকা</h4>
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-1.5 max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
-                  {members.map(member => {
+              {(() => {
+                const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
+                const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
+                const canEditOthers = isManager || isBazarAssignedToMe;
+                
+                if (!canEditOthers) return null;
+
+                return (
+                  <div className="px-5 pb-5">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">এই দিনের মিলের তালিকা</h4>
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-1.5 max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
+                      {members.map(member => {
                     const dateStr = `${currentMonth}-${managerActionDay?.toString().padStart(2, '0')}`;
                     const memberMeal = allMessMeals.find(m => m.userId === member.uid && m.date === dateStr);
                     let memberTotal = 0;
@@ -1213,10 +1221,12 @@ export default function MealsView({
                         </div>
                         <span className={`text-sm font-black transition-colors ${memberTotal > 0 ? 'text-[#6366f1]' : 'text-slate-400 group-hover:text-[#6366f1]/50'}`}>{memberTotal > 0 ? memberTotal : '—'}</span>
                       </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              );
+            })()}
             </motion.div>
           </div>
         )}
