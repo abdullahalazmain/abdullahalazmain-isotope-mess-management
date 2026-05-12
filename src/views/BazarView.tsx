@@ -50,7 +50,8 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
   const [selectedRecord, setSelectedRecord] = useState<BazarRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const currentMonth = new Date().toISOString().substring(0, 7);
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   useEffect(() => {
     if (!messId) return;
@@ -62,8 +63,8 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
     return () => { unsub(); unsubReq(); };
   }, [messId, currentMonth]);
 
-  const [bazarDate, setBazarDate] = useState(new Date().toISOString().split('T')[0]);
-  const [bazarTime, setBazarTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+  const [bazarDate, setBazarDate] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+  const [bazarTime, setBazarTime] = useState(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
   
   const [items, setItems] = useState<BazarItem[]>([{ id: '1', name: '', rate: '', qty: '', total: '' }]);
   const [receipt, setReceipt] = useState<string | null>(null);
