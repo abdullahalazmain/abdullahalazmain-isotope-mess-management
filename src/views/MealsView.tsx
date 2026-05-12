@@ -1081,12 +1081,21 @@ export default function MealsView({
                   const dateStr = `${currentMonth}-${day.toString().padStart(2, '0')}`;
                   const expectedTimeMs = bazarTimers[dateStr];
                   const isBazarDone = bazarRecords.some(r => r.date.startsWith(dateStr) && (r.status === 'Approved' || r.status === 'Done')) || expectedTimeMs === 'DONE';
-                  const isDayLocked = isMonthLocked || isBazarDone;
+                  
+                  const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
+                  
+                  // Comprehensive lock logic for the current user
+                  const isPastDayForMember = !isManager && !isBazarAssignedToMe && monthDiff === 0 && day < today;
+                  const hasTimeCrossed = !isManager && !isBazarAssignedToMe && typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
+                  const isWrongMonthForMember = !isManager && !isBazarAssignedToMe && monthDiff !== 0;
 
-                  if (isDayLocked) return (
+                  const isEffectivelyLocked = isMonthLocked || isBazarDone || isPastDayForMember || hasTimeCrossed || isWrongMonthForMember;
+
+                  if (isEffectivelyLocked) return (
                     <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center gap-1 text-center">
                       <Clock className="w-5 h-5 text-slate-400" />
                       <p className="text-xs font-bold text-slate-500">এই দিনের হিসাব লক করা হয়েছে</p>
+                      <p className="text-[10px] text-slate-400 mt-1">কোনো সমস্যা থাকলে ম্যানেজারের সাথে যোগাযোগ করুন।</p>
                     </div>
                   );
 
@@ -1094,24 +1103,6 @@ export default function MealsView({
                     <>
                       <button
                         onClick={() => {
-                          const isBazarAssignedToMe = assignedDuties[dateStr] === userId || (userName && assignedDuties[dateStr] === userName);
-
-                          if (!isManager && !isBazarAssignedToMe) {
-                            if (monthDiff !== 0) {
-                              alert('আপনি শুধু চলতি মাসের মিল এডিট করতে পারবেন।');
-                              return;
-                            }
-                            if (day < today && monthDiff === 0) {
-                              alert('অতীতের মিল এডিট করার সময় শেষ।');
-                              return;
-                            }
-                            const hasTimeCrossed = typeof expectedTimeMs === 'number' && Date.now() > expectedTimeMs;
-                            if (hasTimeCrossed) {
-                              alert(`মে ${day} তারিখের বাজার করার সময় শেষ। মিল পরিবর্তন করা সম্ভব নয়।`);
-                              return;
-                            }
-                          }
-
                           setEditingDays([day]);
                           resetMealState([day]);
                           setIsModalOpen(true);

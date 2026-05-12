@@ -83,11 +83,6 @@ const LandingNavbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick,
                         <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
                         <div className="flex items-center gap-1.5">
                           <p className="text-[10px] text-slate-500">{userProfile?.email || 'user@example.com'}</p>
-                          {userProfile?.role && (
-                            <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter ${userProfile.role === 'Manager' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                              {userProfile.role === 'Manager' ? 'ম্যানেজার' : 'মেম্বার'}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -148,11 +143,6 @@ const LandingNavbar = ({ isLoggedIn, userProfile, onLoginClick, onRegisterClick,
                       <h4 className="text-[#1e293b] font-bold">{userProfile?.name || 'গুগল ইউজার'}</h4>
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] text-slate-500">{userProfile?.email || 'user@example.com'}</p>
-                        {userProfile?.role && (
-                          <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${userProfile.role === 'Manager' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                            {userProfile.role === 'Manager' ? 'ম্যানেজার' : 'মেম্বার'}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
