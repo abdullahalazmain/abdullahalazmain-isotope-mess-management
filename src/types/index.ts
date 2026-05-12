@@ -111,6 +111,16 @@ export interface Notice {
   hiddenBy: string[];
 }
 
+export interface MarketRequest {
+  id: string;
+  messId: string;
+  userId: string;
+  userName: string;
+  itemName: string;
+  status: 'Pending' | 'Bought';
+  createdAt?: Timestamp;
+}
+
 // ─── Monthly Summary (computed) ───────────────────────────────────────────────
 export interface MemberMonthSummary {
   userId: string;

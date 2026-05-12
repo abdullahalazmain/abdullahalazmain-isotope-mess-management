@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingCart, Calendar as CalendarIcon, TrendingUp, Trophy, AlertCircle, 
   Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3, User
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar } from '../services/bazarService';
+import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar, listenToMarketRequests, addMarketRequest, deleteMarketRequest } from '../services/bazarService';
 import type { BazarRecord, BazarItem } from '../types';
 
 const mockBudgetChart = [
@@ -45,6 +45,8 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [records, setRecords] = useState<BazarRecord[]>([]);
+  const [marketRequests, setMarketRequests] = useState<any[]>([]);
+  const [reqInput, setReqInput] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<BazarRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -56,8 +58,9 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
       setRecords(recs);
       setLoading(false);
     });
-    return unsub;
-  }, [messId]);
+    const unsubReq = listenToMarketRequests(messId, setMarketRequests);
+    return () => { unsub(); unsubReq(); };
+  }, [messId, currentMonth]);
 
   const [bazarDate, setBazarDate] = useState(new Date().toISOString().split('T')[0]);
   const [bazarTime, setBazarTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
@@ -143,6 +146,31 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
 
   const getMemberData = (id: string) => members.find((m: any) => m.id === id || m.uid === id || m.name === id);
   const assignedDuties = messData?.assignedDuties || {};
+
+  const handleAddRequest = async () => {
+    if (!reqInput || !messId || !userId) return;
+    try {
+      await addMarketRequest(messId, userId, userName || 'Unknown', reqInput);
+      setReqInput('');
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    try {
+      await deleteMarketRequest(id);
+    } catch (e) { console.error(e); }
+  };
+
+  const shopperStats = useMemo(() => {
+    const stats: Record<string, { count: number; total: number; name: string }> = {};
+    records.filter(r => r.status === 'Approved').forEach(r => {
+      const uid = r.submittedBy;
+      if (!stats[uid]) stats[uid] = { count: 0, total: 0, name: r.submitterName };
+      stats[uid].count += 1;
+      stats[uid].total += r.totalAmount;
+    });
+    return Object.entries(stats).sort((a, b) => b[1].count - a[1].count);
+  }, [records]);
 
   return (
     <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
@@ -240,66 +268,134 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
           </div>
         </div>
 
-        {/* Right: Charts & Leaderboard */}
-        <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col relative group">
-            <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">বাজেট বনাম খরচ</h3>
-            <div className="flex-1 w-full min-h-[150px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={(() => {
-                    const memberSpending: any = {};
-                    records.filter(r => r.status === 'Approved').forEach(r => {
-                      memberSpending[r.submitterName] = (memberSpending[r.submitterName] || 0) + r.totalAmount;
-                    });
-                    return Object.entries(memberSpending).map(([name, spent]) => ({
-                      name: name.split(' ')[0],
-                      budget: 4000,
-                      spent
-                    }));
-                  })()} 
-                  margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
-                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                  <Bar dataKey="budget" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Bar dataKey="spent" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20}>
-                    {(records || []).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={(entry.totalAmount || 0) > 4000 ? '#f43f5e' : '#6366f1'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+        {/* Right: Market Requests / Shopping List */}
+        <div className="lg:col-span-7 flex flex-col gap-6">
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2.5rem] p-6 h-full flex flex-col min-h-[400px]">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                <Bell className="w-5 h-5 text-rose-500" /> বাজার রিকোয়েস্ট (Shopping List)
+              </h3>
+            </div>
+
+            <div className="flex gap-2 mb-6">
+              <input 
+                type="text" 
+                value={reqInput}
+                onChange={e => setReqInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddRequest()}
+                placeholder="কি কেনা লাগবে লিখুন (যেমন: ১ কেজি ডাল)..."
+                className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
+              />
+              <button 
+                onClick={handleAddRequest}
+                className="p-3 bg-[#6366f1] text-white rounded-2xl shadow-lg shadow-indigo-100 hover:scale-105 transition-transform"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[300px] pr-2 flex flex-col gap-2">
+              <AnimatePresence>
+                {marketRequests.map((req) => (
+                  <motion.div 
+                    key={req.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-rose-400" />
+                      <div>
+                        <p className="text-sm font-black text-slate-700">{req.itemName}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">রিকোয়েস্ট করেছেন: {req.userName}</p>
+                      </div>
+                    </div>
+                    {(isManager || isMarketDuty || req.userId === userId) && (
+                      <button 
+                        onClick={() => handleDeleteRequest(req.id)}
+                        className="w-8 h-8 rounded-xl bg-slate-50 text-slate-400 hover:bg-emerald-50 hover:text-emerald-500 flex items-center justify-center transition-colors"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              {marketRequests.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 opacity-30">
+                  <FileText className="w-10 h-10 mb-2" />
+                  <p className="text-xs font-black">কোনো রিকোয়েস্ট নেই</p>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="bg-gradient-to-b from-indigo-50 to-white border border-indigo-100 shadow-lg rounded-3xl p-5 flex flex-col">
-            <h3 className="text-sm font-bold text-indigo-900 mb-4 flex items-center gap-2"><Trophy className="w-4 h-4 text-yellow-500" /> লিডারবোর্ড</h3>
-            <div className="flex-1 flex flex-col justify-center gap-4">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1 uppercase">সর্বোচ্চ বাজার</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-xs">J</div>
+      {/* Analytics & Leaderboard Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {/* LEADERBOARD CARD */}
+        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2rem] p-6">
+          <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-500" /> সেরা বাজারকারী (এই মাস)
+          </h3>
+          <div className="flex flex-col gap-3">
+            {shopperStats.slice(0, 3).map(([uid, stat], idx) => (
+              <div key={uid} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600' : idx === 1 ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>
+                    {idx + 1}
+                  </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-800">James Doe</p>
-                    <p className="text-[10px] font-bold text-emerald-600">৳ ৪,২০০</p>
+                    <p className="text-xs font-black text-slate-700">{stat.name}</p>
+                    <p className="text-[9px] font-bold text-slate-400">{stat.count} বার বাজার করেছে</p>
                   </div>
                 </div>
+                <p className="text-xs font-black text-[#6366f1]">৳ {stat.total.toLocaleString()}</p>
               </div>
-              <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1 uppercase">সর্বনিম্ন বাজার</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs">K</div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">Karim</p>
-                    <p className="text-[10px] font-bold text-slate-500">৳ ২,৫০০</p>
-                  </div>
-                </div>
+            ))}
+            {shopperStats.length === 0 && (
+              <p className="text-[10px] text-center text-slate-400 py-4 italic">এখনও কোনো অনুমোদিত বাজার নেই</p>
+            )}
+          </div>
+        </div>
+
+        {/* PRICE GUIDE */}
+        <div className="bg-indigo-900 text-white rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+          <h3 className="font-black text-sm mb-4 flex items-center gap-2">
+            <Info className="w-4 h-4 text-indigo-300" /> বাজার দর গাইড
+          </h3>
+          <div className="flex flex-col gap-3 relative z-10">
+            {[
+              { n: 'চাল (কেজি)', p: '৳ ৭০-৮৫' },
+              { n: 'ডিম (ডজন)', p: '৳ ১৪৫-১৫৫' },
+              { n: 'মুরগি (কেজি)', p: '৳ ২৩০-২৫০' }
+            ].map(item => (
+              <div key={item.n} className="flex justify-between items-center border-b border-white/10 pb-2">
+                <span className="text-[10px] font-bold text-indigo-100">{item.n}</span>
+                <span className="text-xs font-black">{item.p}</span>
               </div>
+            ))}
+          </div>
+          <p className="text-[9px] font-bold text-indigo-200/50 mt-4 italic text-center">বাজার দরের সাম্প্রতিক ধারণা</p>
+        </div>
+
+        {/* MESS STATS QUICK LOOK */}
+        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-xl flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">মোট আইটেম কেনা</p>
+              <h3 className="text-2xl font-black text-slate-800">
+                {records.filter(r => r.status === 'Approved').reduce((s, r) => s + (r.items?.length || 0), 0)}
+              </h3>
             </div>
+            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400"><FileText className="w-5 h-5" /></div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <p className="text-[10px] font-bold text-slate-500">বাজার খরচ স্থিতিশীল আছে</p>
           </div>
         </div>
       </div>

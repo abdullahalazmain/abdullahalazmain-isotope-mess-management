@@ -3,11 +3,8 @@
  * All Firestore operations related to bazar (market) tracking.
  */
 
-import {
-  db, collection, query, where, onSnapshot,
-  doc, addDoc, updateDoc, serverTimestamp
-} from '../firebase';
-import type { BazarRecord, BazarItem } from '../types';
+import { db, collection, query, where, onSnapshot, doc, addDoc, updateDoc, serverTimestamp } from '../firebase';
+import type { BazarRecord, BazarItem, MarketRequest } from '../types';
 
 const BAZAR = 'bazar';
 
@@ -71,4 +68,37 @@ export async function rejectBazar(bazarId: string, reason: string) {
     rejectedReason: reason,
     updatedAt: serverTimestamp()
   });
+}
+
+/** Real-time listener: market requests (shopping list) */
+export function listenToMarketRequests(
+  messId: string,
+  callback: (requests: any[]) => void
+) {
+  const q = query(
+    collection(db, 'marketRequests'),
+    where('messId', '==', messId)
+  );
+  return onSnapshot(q, (snap) => {
+    const requests = snap.docs.map(d => ({ id: d.id, ...d.data() })) as MarketRequest[];
+    requests.sort((a, b) =>
+      (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+    );
+    callback(requests);
+  });
+}
+
+/** Add a market request */
+export async function addMarketRequest(messId: string, userId: string, userName: string, itemName: string) {
+  await addDoc(collection(db, 'marketRequests'), {
+    messId, userId, userName, itemName,
+    status: 'Pending',
+    createdAt: serverTimestamp()
+  });
+}
+
+/** Delete/Complete a market request */
+export async function deleteMarketRequest(requestId: string) {
+  const { deleteDoc } = await import('../firebase');
+  await deleteDoc(doc(db, 'marketRequests', requestId));
 }
