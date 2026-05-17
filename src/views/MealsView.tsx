@@ -5,7 +5,7 @@ import type { MealRecord, BazarRecord } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Utensils, ShoppingCart, Calculator, Calendar as CalendarIcon,
-  Plus, Check, X, AlertTriangle, Clock, Edit2, Edit3, Minus, BellRing, MousePointer2, ChevronRight, ChevronLeft, Star, User, Wallet, UtensilsCrossed, Target, Coffee, Sun, Moon, PartyPopper
+  Plus, Check, X, AlertTriangle, Clock, Edit2, Edit3, Minus, BellRing, MousePointer2, ChevronRight, ChevronLeft, Star, User, Users, Wallet, UtensilsCrossed, Target, Coffee, Sun, Moon, PartyPopper
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 export default function MealsView({
@@ -24,15 +24,12 @@ export default function MealsView({
   const [bazarRecords, setBazarRecords] = useState<BazarRecord[]>([]);
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
-  const [managerViewType, setManagerViewType] = useState<'own' | 'mess'>('own');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [tempMenu, setTempMenu] = useState('');
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
   const [timerHours, setTimerHours] = useState(1);
   const [timerMinutes, setTimerMinutes] = useState(0);
-
-  const viewType = isManager ? managerViewType : 'own';
 
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -519,17 +516,19 @@ export default function MealsView({
     const ownMonthBalance = currentMonthLedger.find(m => m.uid === userId)?.balance || 0;
 
     return {
-      totalMeals: viewType === 'own' ? ownTotalM : messTotalM,
-      totalMarket: viewType === 'own' ? ownTotalMar : messTotalMar,
+      ownTotalMeals: ownTotalM,
+      messTotalMeals: messTotalM,
+      ownTotalMarket: ownTotalMar,
+      messTotalMarket: messTotalMar,
       mealRate: rate,
       chartData: messChartData,
       messPositiveBalance,
       messNegativeBalance,
       ownMonthBalance
     };
-  }, [allMessMeals, bazarRecords, currentMonth, days, viewType, userId, members]);
+  }, [allMessMeals, bazarRecords, currentMonth, days, userId, members]);
 
-  const { totalMeals, totalMarket, mealRate, chartData, messPositiveBalance, messNegativeBalance, ownMonthBalance } = stats;
+  const { ownTotalMeals, messTotalMeals, ownTotalMarket, messTotalMarket, mealRate, chartData, messPositiveBalance, messNegativeBalance, ownMonthBalance } = stats;
 
   const handleAssignDuty = async () => {
     if (!messId || !selectedMember || !managerActionDay) return;
@@ -605,96 +604,85 @@ export default function MealsView({
             <p className="text-sm font-semibold text-slate-500">ক্যালেন্ডার ও বাজার ট্র্যাকিং</p>
           </div>
         </div>
-
-        {isManager && (
-          <div className="flex bg-white/70 backdrop-blur-md border border-slate-200 p-1 rounded-2xl shadow-sm">
-            <button
-              onClick={() => setManagerViewType('own')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${managerViewType === 'own' ? 'bg-[#6366f1] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              আমার ওভারভিউ
-            </button>
-            <button
-              onClick={() => setManagerViewType('mess')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${managerViewType === 'mess' ? 'bg-[#6366f1] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              মেসের ওভারভিউ
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Top Overview Cards */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${viewType === 'mess' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6 mb-8`}>
-        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm">
-            <Utensils className="w-7 h-7" />
-          </div>
-          <div>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">সর্বমোট মিল ({bengaliMonths[monthNum - 1]})</p>
-            <h3 className="text-3xl font-black text-slate-900">{totalMeals}</h3>
-          </div>
-        </div>
-        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
-            <ShoppingCart className="w-7 h-7" />
-          </div>
-          <div>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">সর্বমোট বাজার</p>
-            <h3 className="text-3xl font-black text-slate-900">৳ {totalMarket.toLocaleString()}</h3>
-          </div>
-        </div>
-        <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
-            <Calculator className="w-7 h-7" />
-          </div>
-          <div>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">বর্তমান মিল রেট</p>
-            <h3 className="text-3xl font-black text-slate-900">৳ {mealRate.toFixed(2)}</h3>
+      {/* Top Overview Cards - Unified */}
+      <div className="grid grid-cols-1 gap-8 mb-8">
+        
+        {/* Mess Stats Group */}
+        <div>
+          <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-500" /> মেসের হিসাব
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex flex-col justify-center gap-2">
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">সর্বমোট মিল ({bengaliMonths[monthNum - 1]})</p>
+              <h3 className="text-3xl font-black text-slate-900">{messTotalMeals}</h3>
+            </div>
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex flex-col justify-center gap-2">
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">সর্বমোট বাজার</p>
+              <h3 className="text-3xl font-black text-slate-900">৳ {messTotalMarket.toLocaleString()}</h3>
+            </div>
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex flex-col justify-center gap-2">
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">বর্তমান মিল রেট</p>
+              <h3 className="text-3xl font-black text-slate-900">৳ {mealRate.toFixed(2)}</h3>
+            </div>
+            <div className="bg-emerald-500/90 backdrop-blur-md border border-emerald-400 shadow-xl shadow-emerald-200 rounded-3xl p-6 flex flex-col justify-center gap-2 text-white">
+              <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider">মেস পাবে (Balance)</p>
+              <h3 className="text-3xl font-black">৳ {Math.round(messPositiveBalance).toLocaleString()}</h3>
+            </div>
+            <div className="bg-rose-500/90 backdrop-blur-md border border-rose-400 shadow-xl shadow-rose-200 rounded-3xl p-6 flex flex-col justify-center gap-2 text-white">
+              <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider">মেস দিবে (Balance)</p>
+              <h3 className="text-3xl font-black">৳ {Math.round(messNegativeBalance).toLocaleString()}</h3>
+            </div>
           </div>
         </div>
 
-        {viewType === 'mess' ? (
-          <>
-            <div className="bg-emerald-500/90 backdrop-blur-md border border-emerald-400 shadow-xl shadow-emerald-200 rounded-3xl p-6 flex items-center gap-4 text-white">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
-                <Wallet className="w-7 h-7" />
+        {/* Own Stats Group */}
+        <div>
+          <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+            <User className="w-5 h-5 text-emerald-500" /> আমার হিসাব
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm shrink-0">
+                <Utensils className="w-7 h-7" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">পাবে (Balance)</p>
-                <h3 className="text-3xl font-black">৳ {Math.round(messPositiveBalance).toLocaleString()}</h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">আমার মোট মিল</p>
+                <h3 className="text-3xl font-black text-slate-900">{ownTotalMeals}</h3>
               </div>
             </div>
-            <div className="bg-rose-500/90 backdrop-blur-md border border-rose-400 shadow-xl shadow-rose-200 rounded-3xl p-6 flex items-center gap-4 text-white">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
-                <Wallet className="w-7 h-7" />
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-6 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm shrink-0">
+                <ShoppingCart className="w-7 h-7" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">দিবে (Balance)</p>
-                <h3 className="text-3xl font-black">৳ {Math.round(messNegativeBalance).toLocaleString()}</h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">আমার মোট বাজার</p>
+                <h3 className="text-3xl font-black text-slate-900">৳ {ownTotalMarket.toLocaleString()}</h3>
               </div>
             </div>
-          </>
-        ) : (
-          (() => {
-            // Always use our calculated month balance for past/future months
-            const balanceAmount = ownMonthBalance;
-            const isReceive = balanceAmount >= 0;
-            const absBalance = Math.abs(Math.round(balanceAmount));
+            
+            {(() => {
+              const balanceAmount = ownMonthBalance;
+              const isReceive = balanceAmount >= 0;
+              const absBalance = Math.abs(Math.round(balanceAmount));
 
-            return (
-              <div className={`${isReceive ? 'bg-emerald-500/90' : 'bg-rose-500/90'} backdrop-blur-md border ${isReceive ? 'border-emerald-400 shadow-emerald-200' : 'border-rose-400 shadow-rose-200'} shadow-xl rounded-3xl p-6 flex items-center gap-4 text-white transition-colors`}>
-                <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20">
-                  <Wallet className="w-7 h-7" />
+              return (
+                <div className={`${isReceive ? 'bg-emerald-500/90' : 'bg-rose-500/90'} backdrop-blur-md border ${isReceive ? 'border-emerald-400 shadow-emerald-200' : 'border-rose-400 shadow-rose-200'} shadow-xl rounded-3xl p-6 flex items-center gap-4 text-white transition-colors`}>
+                  <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-sm border border-white/20 shrink-0">
+                    <Wallet className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider mb-1">আমি {isReceive ? 'পাবো (Balance)' : 'দিবো (Balance)'}</p>
+                    <h3 className="text-3xl font-black">৳ {absBalance.toLocaleString()}</h3>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">{isReceive ? 'পাবে (Balance)' : 'দিবে (Balance)'}</p>
-                  <h3 className="text-3xl font-black">৳ {absBalance.toLocaleString()}</h3>
-                </div>
-              </div>
-            );
-          })()
-        )}
+              );
+            })()}
+          </div>
+        </div>
+
       </div>
 
       {/* Bazar Warning Banner (For All Members if timer is set and not done) */}

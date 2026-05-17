@@ -93,7 +93,25 @@ export async function addMarketRequest(messId: string, userId: string, userName:
   await addDoc(collection(db, 'marketRequests'), {
     messId, userId, userName, itemName,
     status: 'Pending',
+    votes: {},
     createdAt: serverTimestamp()
+  });
+}
+
+/** Update market request status */
+export async function updateMarketRequestStatus(requestId: string, status: 'Pending' | 'Accepted' | 'Bought') {
+  await updateDoc(doc(db, 'marketRequests', requestId), {
+    status,
+    updatedAt: serverTimestamp()
+  });
+}
+
+/** Vote for a market request */
+export async function voteMarketRequest(requestId: string, userId: string) {
+  const reqRef = doc(db, 'marketRequests', requestId);
+  await updateDoc(reqRef, {
+    [`votes.${userId}`]: true,
+    updatedAt: serverTimestamp()
   });
 }
 

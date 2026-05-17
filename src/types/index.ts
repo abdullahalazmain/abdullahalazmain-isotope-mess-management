@@ -117,7 +117,8 @@ export interface MarketRequest {
   userId: string;
   userName: string;
   itemName: string;
-  status: 'Pending' | 'Bought';
+  status: 'Pending' | 'Accepted' | 'Bought';
+  votes?: Record<string, boolean>; // userId: true
   createdAt?: Timestamp;
 }
 

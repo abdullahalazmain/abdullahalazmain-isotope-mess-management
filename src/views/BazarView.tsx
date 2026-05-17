@@ -2,10 +2,14 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingCart, Calendar as CalendarIcon, TrendingUp, Trophy, AlertCircle, 
-  Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3, User
+  Plus, Check, X, Camera, FileText, ChevronRight, Image as ImageIcon, Trash2, Clock, Info, Bell, Edit3, User, Users
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-import { listenToBazarRecords, submitBazar, approveBazar, rejectBazar, listenToMarketRequests, addMarketRequest, deleteMarketRequest } from '../services/bazarService';
+import { 
+  listenToBazarRecords, submitBazar, approveBazar, rejectBazar, 
+  listenToMarketRequests, addMarketRequest, deleteMarketRequest,
+  updateMarketRequestStatus, voteMarketRequest
+} from '../services/bazarService';
 import type { BazarRecord, BazarItem } from '../types';
 
 const mockBudgetChart = [
@@ -49,6 +53,9 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
   const [reqInput, setReqInput] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<BazarRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requestFilter, setRequestFilter] = useState<'Pending' | 'Accepted'>('Pending');
+  const [historyFilter, setHistoryFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -162,6 +169,49 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
     } catch (e) { console.error(e); }
   };
 
+  const handleAcceptRequest = async (id: string) => {
+    try {
+      await updateMarketRequestStatus(id, 'Accepted');
+    } catch (e) { console.error(e); }
+  };
+
+  const handleVoteRequest = async (id: string) => {
+    if (!userId) return;
+    try {
+      await voteMarketRequest(id, userId);
+    } catch (e) { console.error(e); }
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const shopperId = messData?.assignedDuties?.[todayStr];
+  const isShopperToday = shopperId === userId;
+
+  const chartData = useMemo(() => {
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const data = Array.from({ length: daysInMonth }, (_, i) => ({
+      day: i + 1,
+      amount: 0
+    }));
+
+    records.filter(r => r.status === 'Approved').forEach(r => {
+      const day = parseInt(r.date.split('-')[2]);
+      if (day && data[day - 1]) {
+        data[day - 1].amount += r.totalAmount;
+      }
+    });
+
+    return data;
+  }, [records]);
+
+  const stats = useMemo(() => {
+    const totalSpent = records.filter(r => r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0);
+    const pendingAmount = records.filter(r => r.status === 'Pending').reduce((s, r) => s + r.totalAmount, 0);
+    const approvedCount = records.filter(r => r.status === 'Approved').length;
+    const avgSpend = approvedCount > 0 ? totalSpent / approvedCount : 0;
+    
+    return { totalSpent, pendingAmount, approvedCount, avgSpend };
+  }, [records]);
+
 
   return (
     <div className="flex flex-col h-full relative z-10 w-full animate-fade-in pb-24">
@@ -177,7 +227,7 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
           </div>
         </div>
 
-        {isMarketDuty && !isManager && (
+        {(isMarketDuty || isManager) && (
           <button 
             onClick={() => setIsModalOpen(true)}
             className="hidden md:flex px-6 py-3 bg-[#1e1b4b] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#1e1b4b]/20 hover:bg-[#312e81] transition-all items-center gap-2"
@@ -191,81 +241,134 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
         
         {/* Left: Cards */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          {!isManager ? (
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl p-6 text-white shadow-xl shadow-emerald-200/50 flex justify-between items-center">
-              <div>
-                <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-1">আমার মোট বাজার (My Total)</p>
-                <h3 className="text-3xl font-black">৳ {records.filter(r => r.userId === userId && r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
-              </div>
-              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><ShoppingCart className="w-6 h-6" /></div>
+        <div className="lg:col-span-4 flex flex-col gap-4">
+          <div className="bg-gradient-to-r from-[#1e1b4b] to-indigo-900 rounded-3xl p-6 text-white shadow-xl shadow-indigo-900/30 flex justify-between items-center">
+            <div>
+              <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-1">মেসের মোট বাজার (Mess Total)</p>
+              <h3 className="text-3xl font-black">৳ {records.filter(r => r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
             </div>
-          ) : (
-             <div className="bg-gradient-to-r from-[#1e1b4b] to-indigo-900 rounded-3xl p-6 text-white shadow-xl shadow-indigo-900/30 flex justify-between items-center">
-              <div>
-                <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-1">মেসের মোট বাজার (Mess Total)</p>
-                <h3 className="text-3xl font-black">৳ {records.filter(r => r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
-              </div>
-              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><ShoppingCart className="w-6 h-6" /></div>
+            <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><ShoppingCart className="w-6 h-6" /></div>
+          </div>
+          
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl p-6 text-white shadow-xl shadow-emerald-200/50 flex justify-between items-center">
+            <div>
+              <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-1">আমার মোট বাজার (My Total)</p>
+              <h3 className="text-3xl font-black">৳ {records.filter(r => r.submittedBy === userId && r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
             </div>
-          )}
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><ShoppingCart className="w-6 h-6" /></div>
+          </div>
           
           <div className="grid grid-cols-2 gap-4">
-            {!isManager ? (
-               <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
-                 <div className="flex justify-between items-start mb-2">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">মেসের মোট বাজার</p>
-                   <TrendingUp className="w-4 h-4 text-indigo-500" />
+
+            <div className="col-span-2 bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">দৈনিক বাজার খরচ বিশ্লেষণ</p>
+              <div className="h-[120px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="day" hide />
+                    <YAxis hide />
+                    <RechartsTooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="bg-white/90 backdrop-blur-md border border-slate-100 shadow-xl rounded-lg p-2 text-[10px] font-bold">
+                              <p className="text-slate-500 mb-1">তারিখ: {payload[0].payload.day}</p>
+                              <p className="text-[#6366f1]">খরচ: ৳ {payload[0].value}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+                 <div>
+                   <p className="text-[9px] font-bold text-slate-400 uppercase">গড় খরচ</p>
+                   <p className="text-sm font-black text-slate-800">৳ {Math.round(stats.avgSpend)}</p>
                  </div>
-                 <h3 className="text-xl font-black text-slate-800">৳ {records.filter(r => r.status === 'Approved').reduce((s, r) => s + r.totalAmount, 0).toLocaleString()}</h3>
-               </div>
-            ) : (
-               <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
-                 <div className="flex justify-between items-start mb-2">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">পেন্ডিং এপ্রুভাল</p>
-                   <AlertCircle className="w-4 h-4 text-orange-500" />
+                 <div className="text-right">
+                   <p className="text-[9px] font-bold text-slate-400 uppercase">পেন্ডিং এমাউন্ট</p>
+                   <p className="text-sm font-black text-rose-500">৳ {stats.pendingAmount}</p>
                  </div>
-                 <h3 className="text-xl font-black text-slate-800">{records.filter(r => r.status === 'Pending').length} টি</h3>
-               </div>
-            )}
-            
+              </div>
+            </div>
+
             <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
               <div className="flex justify-between items-start mb-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{isManager ? 'আজকের ডিউটি' : 'আমার ডিউটি'}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">পেন্ডিং এপ্রুভাল</p>
+                <AlertCircle className="w-4 h-4 text-orange-500" />
+              </div>
+              <h3 className="text-xl font-black text-slate-800">{records.filter(r => r.status === 'Pending').length} টি</h3>
+            </div>
+
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
+              <div className="flex justify-between items-start mb-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">সক্রিয় রিকোয়েস্ট</p>
+                <Bell className="w-4 h-4 text-rose-500" />
+              </div>
+              <h3 className="text-xl font-black text-slate-800">{marketRequests.length} টি</h3>
+            </div>
+
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
+              <div className="flex justify-between items-start mb-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">আজকের ডিউটি</p>
                 <CalendarIcon className="w-4 h-4 text-emerald-500" />
               </div>
               <div className="flex flex-wrap gap-1">
-                {isManager ? (
-                   (() => {
-                     const todayStr = new Date().toISOString().split('T')[0];
-                     const dutyUid = messData?.assignedDuties?.[todayStr];
-                     return <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold border border-emerald-100">{dutyUid ? 'নির্ধারিত' : 'কেউ নেই'}</span>;
-                   })()
-                ) : (
-                   (() => {
-                     const myDuties = Object.entries(messData?.assignedDuties || {})
-                       .filter(([date, uid]) => uid === userId && new Date(date) >= new Date())
-                       .map(([date]) => date);
-                     
-                     if (myDuties.length === 0) return <span className="text-[10px] text-slate-400">কোনো ডিউটি নেই</span>;
-                     
-                     return myDuties.slice(0, 2).map(date => (
-                       <span key={date} className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100">{new Date(date).toLocaleDateString('bn-BD', { month: 'short', day: 'numeric' })}</span>
-                     ));
-                   })()
-                )}
+                {(() => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const dutyUid = messData?.assignedDuties?.[todayStr];
+                  const member = getMemberData(dutyUid);
+                  return <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold border border-emerald-100">{member ? member.name : 'কেউ নেই'}</span>;
+                })()}
               </div>
             </div>
+
+            <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-3xl p-5 flex flex-col justify-between">
+              <div className="flex justify-between items-start mb-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">কালকের ডিউটি</p>
+                <Clock className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(() => {
+                  const tomorrow = new Date();
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                  const dutyUid = messData?.assignedDuties?.[tomorrowStr];
+                  const member = getMemberData(dutyUid);
+                  return <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg text-xs font-bold border border-amber-100">{member ? member.name : 'কেউ নেই'}</span>;
+                })()}
+              </div>
+            </div>
+
           </div>
         </div>
 
         {/* Right: Market Requests / Shopping List */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2.5rem] p-6 h-full flex flex-col min-h-[400px]">
-            <div className="flex items-center justify-between mb-6">
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <div className="bg-white/70 backdrop-blur-md border border-white/40 shadow-xl rounded-[2.5rem] p-6 h-full flex flex-col min-h-[450px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
               <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
-                <Bell className="w-5 h-5 text-rose-500" /> বাজার রিকোয়েস্ট (Shopping List)
+                <Bell className="w-5 h-5 text-rose-500" /> বাজার রিকোয়েস্ট
               </h3>
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button 
+                  onClick={() => setRequestFilter('Pending')}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${requestFilter === 'Pending' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  পেন্ডিং
+                </button>
+                <button 
+                  onClick={() => setRequestFilter('Accepted')}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${requestFilter === 'Accepted' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  অ্যাকসেপ্টেড
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2 mb-6">
@@ -287,33 +390,67 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
 
             <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[300px] pr-2 flex flex-col gap-2">
               <AnimatePresence>
-                {marketRequests.map((req) => (
-                  <motion.div 
-                    key={req.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-rose-400" />
-                      <div>
-                        <p className="text-sm font-black text-slate-700">{req.itemName}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">রিকোয়েস্ট করেছেন: {req.userName}</p>
+                {marketRequests.filter(req => (req.status || 'Pending') === requestFilter).map((req) => {
+                  const voteCount = Object.keys(req.votes || {}).length;
+                  const hasVoted = req.votes?.[userId || ''];
+                  const isCreator = req.userId === userId;
+                  const canAccept = isManager || isShopperToday;
+                  
+                  return (
+                    <motion.div 
+                      key={req.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${requestFilter === 'Pending' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+                        <div>
+                          <p className="text-sm font-black text-slate-700">{req.itemName}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">রিকোয়েস্ট করেছেন: {req.userName}</p>
+                        </div>
                       </div>
-                    </div>
-                    {(isManager || isMarketDuty || req.userId === userId) && (
-                      <button 
-                        onClick={() => handleDeleteRequest(req.id)}
-                        className="w-8 h-8 rounded-xl bg-slate-50 text-slate-400 hover:bg-emerald-50 hover:text-emerald-500 flex items-center justify-center transition-colors"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-                    )}
-                  </motion.div>
-                ))}
+                      
+                      <div className="flex items-center gap-2">
+                        {requestFilter === 'Pending' && (
+                          <>
+                            {!canAccept && (
+                              <button 
+                                onClick={() => handleVoteRequest(req.id)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all ${hasVoted ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-bold">{voteCount}</span>
+                              </button>
+                            )}
+                            
+                            {canAccept && (
+                              <button 
+                                onClick={() => handleAcceptRequest(req.id)}
+                                className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition-colors"
+                                title="Accept Request"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
+                        )}
+                        
+                        {(isManager || isCreator) && (
+                          <button 
+                            onClick={() => handleDeleteRequest(req.id)}
+                            className="w-8 h-8 rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </AnimatePresence>
-              {marketRequests.length === 0 && (
+              {marketRequests.filter(req => (req.status || 'Pending') === requestFilter).length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 opacity-30">
                   <FileText className="w-10 h-10 mb-2" />
                   <p className="text-xs font-black">কোনো রিকোয়েস্ট নেই</p>
@@ -322,175 +459,265 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Analytics & Leaderboard Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-
-        {/* PRICE GUIDE */}
-        <div className="bg-indigo-900 text-white rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-          <h3 className="font-black text-sm mb-4 flex items-center gap-2">
-            <Info className="w-4 h-4 text-indigo-300" /> বাজার দর গাইড
-          </h3>
-          <div className="flex flex-col gap-3 relative z-10">
-            {[
-              { n: 'চাল (কেজি)', p: '৳ ৭০-৮৫' },
-              { n: 'ডিম (ডজন)', p: '৳ ১৪৫-১৫৫' },
-              { n: 'মুরগি (কেজি)', p: '৳ ২৩০-২৫০' }
-            ].map(item => (
-              <div key={item.n} className="flex justify-between items-center border-b border-white/10 pb-2">
-                <span className="text-[10px] font-bold text-indigo-100">{item.n}</span>
-                <span className="text-xs font-black">{item.p}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[9px] font-bold text-indigo-200/50 mt-4 italic text-center">বাজার দরের সাম্প্রতিক ধারণা</p>
-        </div>
-
-        {/* MESS STATS QUICK LOOK */}
-        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-xl flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">মোট আইটেম কেনা</p>
-              <h3 className="text-2xl font-black text-slate-800">
-                {records.filter(r => r.status === 'Approved').reduce((s, r) => s + (r.items?.length || 0), 0)}
-              </h3>
+        {/* Right side next to shopping list: Price Guide & Total Bought */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+           {/* PRICE GUIDE */}
+          <div className="bg-indigo-900 text-white rounded-[2rem] p-6 shadow-xl relative overflow-hidden h-[210px]">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+            <h3 className="font-black text-sm mb-4 flex items-center gap-2">
+              <Info className="w-4 h-4 text-indigo-300" /> বাজার দর গাইড
+            </h3>
+            <div className="flex flex-col gap-3 relative z-10">
+              {[
+                { n: 'চাল (কেজি)', p: '৳ ৭০-৮৫' },
+                { n: 'ডিম (ডজন)', p: '৳ ১৪৫-১৫৫' },
+                { n: 'মুরগি (কেজি)', p: '৳ ২৩০-২৫০' }
+              ].map(item => (
+                <div key={item.n} className="flex justify-between items-center border-b border-white/10 pb-2">
+                  <span className="text-[10px] font-bold text-indigo-100">{item.n}</span>
+                  <span className="text-xs font-black">{item.p}</span>
+                </div>
+              ))}
             </div>
-            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400"><FileText className="w-5 h-5" /></div>
+            <p className="text-[9px] font-bold text-indigo-200/50 mt-4 italic text-center">বাজার দরের সাম্প্রতিক ধারণা</p>
           </div>
-          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <p className="text-[10px] font-bold text-slate-500">বাজার খরচ স্থিতিশীল আছে</p>
+
+          {/* MESS STATS QUICK LOOK */}
+          <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-xl flex flex-col justify-between h-[210px]">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">মোট আইটেম কেনা (এ মাসে)</p>
+                <h3 className="text-2xl font-black text-slate-800">
+                  {records.filter(r => r.status === 'Approved').reduce((s, r) => s + (r.items?.length || 0), 0)} টি
+                </h3>
+              </div>
+              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400"><FileText className="w-5 h-5" /></div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-[10px] font-bold text-slate-500">বাজার খরচ স্থিতিশীল আছে</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-8">
-        <h2 className="text-lg font-black text-slate-800 mb-4">বাজারের ডিউটি ও নোটিশ</h2>
-        <div className="bg-white/70 backdrop-blur-md shadow-lg border border-slate-100 rounded-3xl p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {(() => {
-              const colors = [
-                'bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100', 
-                'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100', 
-                'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100', 
-                'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100', 
-                'bg-purple-50 border-purple-100 text-purple-700 hover:bg-purple-100', 
-                'bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100',
-                'bg-orange-50 border-orange-100 text-orange-700 hover:bg-orange-100',
-                'bg-teal-50 border-teal-100 text-teal-700 hover:bg-teal-100'
-              ];
-              const nameToColorMap: { [key: string]: string } = {};
-              let colorIdx = 0;
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        
+        {/* Left Column: Duty & Notice */}
+        <div className="flex flex-col">
+          <h2 className="text-lg font-black text-slate-800 mb-4">বাজারের ডিউটি ও নোটিশ</h2>
+          <div className="bg-white/70 backdrop-blur-md shadow-lg border border-slate-100 rounded-3xl p-6 flex-1">
+            <div className="flex flex-col gap-4">
+              {(() => {
+                const colors = [
+                  'bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100', 
+                  'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100', 
+                  'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100', 
+                  'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100', 
+                  'bg-purple-50 border-purple-100 text-purple-700 hover:bg-purple-100', 
+                  'bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100',
+                  'bg-orange-50 border-orange-100 text-orange-700 hover:bg-orange-100',
+                  'bg-teal-50 border-teal-100 text-teal-700 hover:bg-teal-100'
+                ];
+                const nameToColorMap: { [key: string]: string } = {};
+                let colorIdx = 0;
 
-              const duties = Object.entries(assignedDuties)
-                .filter(([dateStr]) => dateStr.startsWith(currentMonth))
-                .sort();
+                const dutiesByMember: { [key: string]: string[] } = {};
+                Object.entries(assignedDuties)
+                  .filter(([dateStr]) => dateStr.startsWith(currentMonth))
+                  .forEach(([dateStr, member]) => {
+                    const memberIdOrName = String(member);
+                    if (!dutiesByMember[memberIdOrName]) dutiesByMember[memberIdOrName] = [];
+                    dutiesByMember[memberIdOrName].push(dateStr);
+                  });
 
-              if (duties.length === 0) {
-                return (
-                  <div className="col-span-full py-12 flex flex-col items-center justify-center opacity-30 text-center">
-                    <ShoppingCart className="w-12 h-12 mb-3" />
-                    <p className="text-sm font-black">এ মাসের কোনো ডিউটি অ্যাসাইন করা হয়নি</p>
-                  </div>
-                );
-              }
+                const memberDutyEntries = Object.entries(dutiesByMember);
 
-              return duties.map(([dateStr, member]) => {
-                  const dayNum = parseInt(dateStr.split('-')[2]) || 0;
-                  const memberIdOrName = String(member);
-                  const memberObj = getMemberData(memberIdOrName);
-                  const displayName = memberObj?.name || memberIdOrName;
-                  
-                  if (!nameToColorMap[displayName]) {
-                    nameToColorMap[displayName] = colors[colorIdx % colors.length];
-                    colorIdx++;
-                  }
+                if (memberDutyEntries.length === 0) {
                   return (
-                    <div key={dateStr} className={`flex justify-between items-center p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md cursor-pointer ${nameToColorMap[displayName]}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white/60 rounded-xl flex items-center justify-center font-black text-sm shadow-sm">
-                          {dayNum}
-                        </div>
-                        <div className="flex items-center gap-2">
+                    <div className="py-12 flex flex-col items-center justify-center opacity-30 text-center h-full">
+                      <ShoppingCart className="w-12 h-12 mb-3" />
+                      <p className="text-sm font-black">এ মাসের কোনো ডিউটি অ্যাসাইন করা হয়নি</p>
+                    </div>
+                  );
+                }
+
+                return memberDutyEntries.map(([memberIdOrName, dates]) => {
+                    const memberObj = getMemberData(memberIdOrName);
+                    const displayName = memberObj?.name || memberIdOrName;
+                    
+                    if (!nameToColorMap[displayName]) {
+                      nameToColorMap[displayName] = colors[colorIdx % colors.length];
+                      colorIdx++;
+                    }
+                    
+                    return (
+                      <div key={memberIdOrName} className={`flex justify-between items-center p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md ${nameToColorMap[displayName]}`}>
+                        <div className="flex items-center gap-4">
                           {memberObj?.photoURL ? (
-                            <img src={memberObj.photoURL} alt={displayName} className="w-8 h-8 rounded-full object-cover border border-white/40" />
+                            <img src={memberObj.photoURL} alt={displayName} className="w-10 h-10 rounded-full object-cover border-2 border-white/40 shadow-sm" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center">
-                              <User className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-full bg-white/40 flex items-center justify-center shadow-sm">
+                              <User className="w-5 h-5" />
                             </div>
                           )}
                           <div>
-                            <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">বাজার ডিউটি</p>
-                            <h4 className="text-sm font-black truncate max-w-[100px]">{displayName}</h4>
+                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">মেম্বার</p>
+                            <h4 className="text-base font-black">{displayName}</h4>
                           </div>
                         </div>
+                        <div className="flex flex-wrap gap-2 justify-end max-w-[50%]">
+                          {dates.sort().map(dateStr => {
+                            const dayNum = parseInt(dateStr.split('-')[2]) || 0;
+                            return (
+                              <div key={dateStr} className="w-8 h-8 bg-white/60 rounded-xl flex items-center justify-center font-black text-xs shadow-sm" title={dateStr}>
+                                {dayNum}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <CalendarIcon className="w-4 h-4 opacity-40" />
-                    </div>
-                  );
-              });
-            })()}
+                    );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Bazar History */}
+        <div className="flex flex-col">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+            <h2 className="text-lg font-black text-slate-800">বাজারের হিস্ট্রি</h2>
+            <div className="flex bg-white/50 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto no-scrollbar">
+              {['All', 'Pending', 'Approved', 'Rejected'].map((status) => (
+                <button 
+                  key={status}
+                  onClick={() => setHistoryFilter(status as any)}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${historyFilter === status ? 'bg-[#1e1b4b] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {status === 'All' ? 'সবগুলো' : status === 'Pending' ? 'পেন্ডিং' : status === 'Approved' ? 'এপ্রুভড' : 'রিজেক্টেড'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white/70 backdrop-blur-md shadow-lg border border-slate-100 rounded-3xl p-6 flex-1 flex flex-col min-h-[400px]">
+            <div className="flex flex-col gap-4 flex-1">
+              <AnimatePresence mode="popLayout">
+                {records.filter(r => historyFilter === 'All' || r.status === historyFilter).length > 0 ? (
+                  records
+                    .filter(r => historyFilter === 'All' || r.status === historyFilter)
+                    .map((record) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      key={record.id} 
+                      className="bg-white/70 backdrop-blur-md border border-slate-100 shadow-md rounded-2xl overflow-hidden transition-all"
+                    >
+                      <div 
+                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50/50 transition-colors"
+                        onClick={() => setExpandedHistoryId(expandedHistoryId === record.id ? null : record.id)}
+                      >
+                        <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                          <div className="flex items-center gap-2 w-28 shrink-0">
+                            <CalendarIcon className="w-4 h-4 text-slate-400" />
+                            <span className="text-xs font-bold text-slate-600 truncate">{record.date.split(' - ')[0]}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center shrink-0 hidden sm:flex">
+                              <User className="w-4 h-4" />
+                            </div>
+                            <span className="text-sm font-black text-slate-800 truncate">{record.submitterName}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 w-28 shrink-0 justify-end">
+                            <span className="text-base sm:text-lg font-black text-[#6366f1]">৳ {record.totalAmount.toLocaleString()}</span>
+                          </div>
+                          
+                          <div className="w-20 shrink-0 hidden sm:flex justify-end">
+                            <div className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border
+                              ${record.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                              : record.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-100' 
+                              : 'bg-orange-50 text-orange-600 border-orange-100'}`}
+                            >
+                              {record.status}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="ml-4 w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors shrink-0">
+                          <motion.div animate={{ rotate: expandedHistoryId === record.id ? 90 : 0 }}>
+                            <ChevronRight className="w-5 h-5" />
+                          </motion.div>
+                        </div>
+                      </div>
+                      
+                      <AnimatePresence>
+                        {expandedHistoryId === record.id && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="border-t border-slate-100 bg-slate-50/30"
+                          >
+                            <div className="p-4 overflow-x-auto">
+                              <table className="w-full text-left min-w-[400px]">
+                                <thead>
+                                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                    <th className="px-4 py-2">আইটেম</th>
+                                    <th className="py-2 text-center">পরিমাণ</th>
+                                    <th className="py-2 text-center">দর</th>
+                                    <th className="px-4 py-2 text-right">মোট দাম</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {record.items.map((item, idx) => (
+                                    <tr key={item.id} className={`${idx !== record.items.length - 1 ? 'border-b border-slate-100/50' : ''}`}>
+                                      <td className="px-4 py-2.5 font-bold text-slate-700 text-xs">{item.name}</td>
+                                      <td className="py-2.5 text-xs font-semibold text-slate-500 text-center">{item.qty || '-'}</td>
+                                      <td className="py-2.5 text-xs font-semibold text-slate-500 text-center">{item.rate ? `৳ ${item.rate}` : '-'}</td>
+                                      <td className="px-4 py-2.5 font-black text-slate-900 text-right text-xs">৳ {item.total}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              
+                              <div className="mt-4 flex justify-between items-center px-4">
+                                <button 
+                                  onClick={() => setSelectedRecord(record)}
+                                  className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 flex items-center gap-1"
+                                >
+                                  <Info className="w-3.5 h-3.5" /> বিস্তারিত দেখুন (রসিদ/অ্যাকশন)
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  ))
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center flex-1 py-12 opacity-40 text-center h-full min-h-[250px]"
+                  >
+                    <FileText className="w-16 h-16 mb-4 text-slate-400" />
+                    <p className="text-base font-black text-slate-600">কোনো বাজারের হিস্ট্রি নেই</p>
+                    <p className="text-xs font-bold text-slate-400 mt-2">বর্তমানে এই ফিল্টারে দেখানোর মত কোনো রেকর্ড নেই।</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* List Section: Bazar Records */}
-      <h2 className="text-lg font-black text-slate-800 mb-4">বাজারের হিস্ট্রি</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {records.map((record) => (
-          <div 
-            key={record.id} 
-            className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-lg rounded-[2rem] p-5 hover:shadow-xl transition-all cursor-pointer group"
-            onClick={() => setSelectedRecord(record)}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mb-1"><CalendarIcon className="w-3 h-3" /> {record.date}</p>
-                <h3 className="text-lg font-black text-slate-800">{record.submitterName}</h3>
-              </div>
-              <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 
-                ${record.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                : record.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border border-rose-100' 
-                : 'bg-orange-50 text-orange-600 border border-orange-100'}`}
-              >
-                {record.status === 'Approved' ? <Check className="w-3 h-3" /> : record.status === 'Rejected' ? <AlertCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                {record.status}
-              </div>
-            </div>
-            
-            <div className="flex justify-between items-end border-t border-slate-100 pt-4">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">মোট খরচ</p>
-                <p className="text-xl font-black text-[#6366f1]">৳ {record.totalAmount}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {record.status === 'Rejected' && !isManager && (
-                   <div 
-                     onClick={(e) => { e.stopPropagation(); alert(`Manager Rejection Reason: ${record.rejectedReason}`); }}
-                     className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors"
-                   >
-                     <Info className="w-4 h-4" />
-                   </div>
-                )}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); }}
-                  className={`px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition-colors ${record.hasReceipt ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'bg-slate-50 text-slate-400 cursor-not-allowed'}`}
-                >
-                  <FileText className="w-3 h-3" /> রসিদ
-                </button>
-                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-[#6366f1] group-hover:text-white transition-colors">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Floating Action Button (Mobile) */}
-      {isMarketDuty && !isManager && (
+      {(isMarketDuty || isManager) && (
         <button 
           onClick={() => setIsModalOpen(true)}
           className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-[#1e1b4b] text-white rounded-full shadow-[0_10px_30px_rgba(30,27,75,0.4)] flex items-center justify-center z-40 hover:scale-105 transition-transform"
@@ -526,49 +753,65 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
                  </div>
               )}
 
-              <div className="p-6 overflow-y-auto">
-                <table className="w-full text-left mb-6">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      <th className="pb-3">আইটেম</th>
-                      <th className="pb-3 text-center">দর</th>
-                      <th className="pb-3 text-center">পরিমাণ</th>
-                      <th className="pb-3 text-right">টাকা</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedRecord.items.map(item => (
-                      <tr key={item.id} className="border-b border-slate-50 last:border-0">
-                        <td className="py-3 font-bold text-slate-700">{item.name}</td>
-                        <td className="py-3 text-xs text-slate-500 text-center">{item.rate || '-'}</td>
-                        <td className="py-3 text-xs text-slate-500 text-center">{item.qty || '-'}</td>
-                        <td className="py-3 font-bold text-slate-800 text-right">৳ {item.total}</td>
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                <div className="bg-slate-50/50 rounded-3xl p-2 border border-slate-100 mb-6">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="px-4 py-3">আইটেম</th>
+                        <th className="py-3 text-center">দর</th>
+                        <th className="py-3 text-center">পরিমাণ</th>
+                        <th className="px-4 py-3 text-right">টাকা</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {selectedRecord.items.map((item, idx) => (
+                        <tr key={item.id} className={`group ${idx !== selectedRecord.items.length - 1 ? 'border-b border-slate-100/50' : ''}`}>
+                          <td className="px-4 py-3.5 font-bold text-slate-700 text-sm">{item.name}</td>
+                          <td className="py-3.5 text-xs font-semibold text-slate-500 text-center">{item.rate || '-'}</td>
+                          <td className="py-3.5 text-xs font-semibold text-slate-500 text-center">{item.qty || '-'}</td>
+                          <td className="px-4 py-3.5 font-black text-slate-900 text-right text-sm">৳ {item.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                 
                 {selectedRecord.hasReceipt && (
-                  <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-indigo-600">
-                      <ImageIcon className="w-5 h-5" />
-                      <span className="text-sm font-bold">রসিদ সংযুক্ত আছে</span>
+                  <div className="p-6 bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 rounded-[2rem] shadow-inner">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3 text-indigo-600">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-indigo-50">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                        <span className="text-sm font-black uppercase tracking-wider">বাজারের রসিদ</span>
+                      </div>
+                      <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">View Full Image</button>
                     </div>
-                    <button className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-50">View Image</button>
+                    <div className="aspect-[4/3] bg-white rounded-2xl border-2 border-dashed border-indigo-100 flex items-center justify-center overflow-hidden">
+                      <img src="https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=400" alt="Receipt Mock" className="w-full h-full object-cover opacity-50 grayscale" />
+                    </div>
                   </div>
                 )}
               </div>
               
-              <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col gap-4">
+              <div className="p-8 bg-slate-50/80 backdrop-blur-md border-t border-slate-100 flex flex-col gap-6 relative z-10">
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">সর্বমোট</span>
-                  <span className="text-2xl font-black text-[#6366f1]">৳ {selectedRecord.totalAmount}</span>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">সর্বমোট খরচ</p>
+                    <span className="text-3xl font-black text-slate-900">৳ {selectedRecord.totalAmount.toLocaleString()}</span>
+                  </div>
+                  {selectedRecord.status === 'Approved' && (
+                    <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 animate-bounce-subtle">
+                      <Check className="w-6 h-6" />
+                    </div>
+                  )}
                 </div>
                 
                 {isManager && selectedRecord.status === 'Pending' && (
-                  <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-200">
-                     <button onClick={() => setIsDeclineModalOpen(true)} className="py-3 bg-white border-2 border-rose-100 text-rose-500 rounded-xl font-bold hover:bg-rose-50 transition-colors">Decline</button>
-                     <button onClick={handleApprove} className="py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-colors">Accept</button>
+                  <div className="grid grid-cols-2 gap-4">
+                     <button onClick={() => setIsDeclineModalOpen(true)} className="py-4 bg-white border-2 border-rose-100 text-rose-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-rose-50 transition-all shadow-sm">Decline</button>
+                     <button onClick={handleApprove} className="py-4 bg-[#1e1b4b] text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-[#2e2b5b] shadow-xl shadow-indigo-100 transition-all">Approve Entry</button>
                   </div>
                 )}
               </div>
@@ -622,7 +865,7 @@ export default function BazarView({ isManager, messId, userId, userName, messDat
 
       {/* ADD BAZAR MODAL (Dynamic Form) - For Members Only */}
       <AnimatePresence>
-        {isModalOpen && !isManager && (
+         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
             <motion.div 
